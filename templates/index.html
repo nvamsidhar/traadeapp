@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Multi-Chart Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+
+  <!-- ── Top bar ─────────────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="status-dot connected" id="hlDotHeader"></span>
+      <span class="logo">Live Multi-Chart Dashboard</span>
+    </div>
+
+    <!-- Number of charts dropdown -->
+    <div class="topbar-group">
+      <span class="topbar-label">NUMBER OF CHARTS</span>
+      <select class="chart-count-select" id="chartCountSelect">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="4" selected>4</option>
+        <option value="6">6</option>
+        <option value="8">8</option>
+      </select>
+    </div>
+
+    <!-- Theme dropdown -->
+    <div class="topbar-group">
+      <span class="topbar-label">THEME</span>
+      <select class="theme-select" id="themeSelect">
+        <option value="dark" selected>Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </div>
+
+    <!-- Backtest button -->
+    <button class="alerts-btn" id="backtestBtn" type="button">BACKTEST</button>
+
+    <!-- Alerts button -->
+    <button class="alerts-btn" id="alertsBtn" type="button">
+      ALERTS <span class="alerts-count" id="alertsCount">0</span>
+    </button>
+
+    <!-- Status indicators -->
+    <div class="status-indicators">
+      <div class="status-pill" id="hlPill">
+        <span class="status-dot" id="hlStatus"></span>
+        <span class="status-text">HL live</span>
+      </div>
+      <div class="status-pill" id="usPill">
+        <span class="status-dot" id="usStatus"></span>
+        <span class="status-text">US market closed</span>
+      </div>
+      <div class="status-pill" id="inPill">
+        <span class="status-dot" id="inStatus"></span>
+        <span class="status-text">IN market closed</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Chart grid ──────────────────────────────────────────────────────── -->
+  <main class="grid-container" id="grid"></main>
+
+  <!-- ── Watchlist strip ─────────────────────────────────────────────────── -->
+  <section class="watchlist" id="watchlist">
+    <button class="watch-toggle" id="watchToggle" type="button" title="Hide / show watchlist">▾</button>
+    <div class="watch-tiles" id="watchTiles"></div>
+    <div class="watch-add">
+      <select id="watchAddSource" title="Source">
+        <option value="crypto">crypto</option>
+        <option value="us">us</option>
+        <option value="india">india</option>
+      </select>
+      <input type="text" id="watchAddSymbol" placeholder="Add symbol…" autocomplete="off" spellcheck="false"/>
+      <button class="watch-add-btn" id="watchAddBtn" type="button">+</button>
+    </div>
+  </section>
+
+  <!-- ── Pane template ───────────────────────────────────────────────────── -->
+  <template id="pane-template">
+    <div class="pane">
+      <div class="pane-controls">
+        <!-- Data source selector -->
+        <select class="source-select">
+          <option value="crypto">Hyperliquid (Crypto)</option>
+          <option value="us">Yahoo Finance (US Stocks)</option>
+          <option value="india">Yahoo Finance (India)</option>
+        </select>
+        <!-- Symbol: shows dropdown with suggestions, also allows typing -->
+        <input class="symbol-input" type="text" placeholder="Symbol..." list="" autocomplete="off" spellcheck="false" />
+        <datalist class="symbol-datalist"></datalist>
+        <!-- Interval -->
+        <select class="interval-select"></select>
+        <!-- Stats: day / week / month / YTD / year highs, lows, % change -->
+        <button class="stats-btn" type="button" title="Performance stats — day / week / month / YTD / year">STATS</button>
+
+        <!-- News: today's headlines for the symbol (US + India stocks) -->
+        <button class="stats-btn news-btn" type="button" title="Recent news headlines for this symbol">NEWS</button>
+
+        <!-- Projections: forward-looking analysis from current data -->
+        <button class="stats-btn proj-btn" type="button" title="Projections — linear trend, ATR probability ranges, support/resistance, indicator convergence ETAs">PROJ</button>
+
+        <!-- Compare overlay -->
+        <div class="vs-dropdown">
+          <button class="vs-btn" type="button" title="Overlay a second symbol normalized to the same starting price">VS</button>
+          <div class="vs-popup">
+            <select class="vs-source">
+              <option value="crypto">crypto</option>
+              <option value="us">us</option>
+              <option value="india">india</option>
+            </select>
+            <input type="text" class="vs-input" placeholder="symbol" autocomplete="off" spellcheck="false"/>
+            <button class="vs-add" type="button">+</button>
+          </div>
+          <span class="vs-chip" hidden>vs <span class="vs-chip-sym"></span> <button type="button" class="vs-chip-del" aria-label="Remove comparison">×</button></span>
+        </div>
+
+        <!-- Drawing toolbar. Pick a tool, then click the chart to anchor.
+             Right-click on / near a drawing deletes it; right-click on empty
+             chart space resets zoom + auto-scale to fit all data. -->
+        <div class="draw-toolbar">
+          <button class="draw-tool draw-btn" data-tool="hline" type="button" title="Horizontal price line (1 click)">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="2" y1="7" x2="12" y2="7"/></svg>
+          </button>
+          <button class="draw-tool" data-tool="vline" type="button" title="Vertical time line (1 click) — mark earnings, news, breakouts">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="2" x2="7" y2="12"/></svg>
+          </button>
+          <button class="draw-tool" data-tool="trend" type="button" title="Trend line (2 clicks)">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="2" y1="12" x2="12" y2="2"/></svg>
+          </button>
+          <button class="draw-tool" data-tool="fib" type="button" title="Fibonacci retracement (2 clicks — swing high to low)">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><line x1="2" y1="2.5" x2="12" y2="2.5"/><line x1="2" y1="5.5" x2="12" y2="5.5"/><line x1="2" y1="8.5" x2="12" y2="8.5"/><line x1="2" y1="11.5" x2="12" y2="11.5"/></svg>
+          </button>
+          <button class="draw-tool" data-tool="rect" type="button" title="Rectangle / zone (2 clicks — opposite corners)">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="3" width="10" height="8" rx="0.5"/></svg>
+          </button>
+          <button class="draw-tool" data-tool="arrow" type="button" title="Arrow (2 clicks — start, then end)">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="7" x2="11" y2="7"/><polyline points="8,4 11,7 8,10"/></svg>
+          </button>
+          <button class="draw-tool draw-magnet" type="button" title="Magnet Mode — snap drawings to the nearest OHLC of the candle under the cursor">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12 V7 a4 4 0 0 1 8 0 V12"/><line x1="3" y1="9.5" x2="5" y2="9.5"/><line x1="9" y1="9.5" x2="11" y2="9.5"/></svg>
+          </button>
+        </div>
+
+        <!-- Indicators -->
+        <div class="indicator-dropdown">
+          <button class="indicator-btn" type="button">INDICATORS</button>
+          <div class="indicator-menu">
+            <div class="ind-cat">STRATEGY</div>
+            <label><input type="checkbox" data-ind="xo"/><span class="swatch" style="background:#22c55e"></span>XO Trend (12/25)</label>
+
+            <div class="ind-cat">TREND</div>
+            <label><input type="checkbox" data-ind="sma20"/><span class="swatch" style="background:#f59e0b"></span>SMA <input type="number" class="period-input" data-period="sma20" min="1" max="500" value="20"/></label>
+            <label><input type="checkbox" data-ind="sma50"/><span class="swatch" style="background:#a855f7"></span>SMA <input type="number" class="period-input" data-period="sma50" min="1" max="500" value="50"/></label>
+            <label><input type="checkbox" data-ind="ema12"/><span class="swatch" style="background:#06b6d4"></span>EMA <input type="number" class="period-input" data-period="ema12" min="1" max="500" value="12"/></label>
+            <label><input type="checkbox" data-ind="ema26"/><span class="swatch" style="background:#ec4899"></span>EMA <input type="number" class="period-input" data-period="ema26" min="1" max="500" value="26"/></label>
+            <label><input type="checkbox" data-ind="bb"   /><span class="swatch" style="background:#6366f1"></span>Bollinger Bands</label>
+            <label><input type="checkbox" data-ind="vwap" /><span class="swatch" style="background:#f97316"></span>VWAP</label>
+            <label><input type="checkbox" data-ind="supertrend"/><span class="swatch" style="background:#a855f7"></span>Supertrend (10, 3)</label>
+            <label><input type="checkbox" data-ind="ichimoku"  /><span class="swatch" style="background:#06b6d4"></span>Ichimoku Cloud</label>
+            <label><input type="checkbox" data-ind="pivots"    /><span class="swatch" style="background:#888"></span>Pivot Points</label>
+
+            <div class="ind-cat">PRICE ACTION</div>
+            <label><input type="checkbox" data-ind="fvg"/><span class="swatch" style="background:#eab308"></span>Fair Value Gaps</label>
+            <label><input type="checkbox" data-ind="vp" /><span class="swatch" style="background:#22c55e"></span>Volume Profile (POC/VA)</label>
+
+            <div class="ind-cat">VOLUME</div>
+            <label><input type="checkbox" data-ind="volume"/><span class="swatch" style="background:#888"></span>Volume</label>
+
+            <div class="ind-cat">OSCILLATORS</div>
+            <label><input type="checkbox" data-ind="rsi"  /><span class="swatch" style="background:#a855f7"></span>RSI (14)</label>
+            <label><input type="checkbox" data-ind="macd" /><span class="swatch" style="background:#06b6d4"></span>MACD (12, 26, 9)</label>
+            <label><input type="checkbox" data-ind="stoch"/><span class="swatch" style="background:#f59e0b"></span>Stochastic (14, 3, 3)</label>
+            <label><input type="checkbox" data-ind="stochrsi"/><span class="swatch" style="background:#d946ef"></span>Stoch RSI (14, 14, 3, 3)</label>
+            <label><input type="checkbox" data-ind="atr"  /><span class="swatch" style="background:#22c55e"></span>ATR (14)</label>
+            <label><input type="checkbox" data-ind="adx"  /><span class="swatch" style="background:#ef4444"></span>ADX (14)</label>
+            <label><input type="checkbox" data-ind="cci"  /><span class="swatch" style="background:#f97316"></span>CCI (20)</label>
+            <label><input type="checkbox" data-ind="obv"  /><span class="swatch" style="background:#3b82f6"></span>OBV</label>
+            <label><input type="checkbox" data-ind="mfi"  /><span class="swatch" style="background:#ef4444"></span>MFI (14)</label>
+            <label><input type="checkbox" data-ind="wr"   /><span class="swatch" style="background:#e5e5e5"></span>Williams %R</label>
+          </div>
+        </div>
+        <!-- Ticker -->
+        <div class="ticker-bar">
+          <span class="ticker-symbol"></span>
+          <span class="ticker-price">--</span>
+          <span class="ticker-abs-change"></span>
+          <span class="ticker-pct-change"></span>
+        </div>
+      </div>
+      <div class="chart-container"></div>
+    </div>
+  </template>
+
+  <!-- ── Alerts modal ────────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="alertsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="alertsTitle">
+      <div class="modal-header">
+        <h2 id="alertsTitle">Alerts</h2>
+        <div class="modal-header-right">
+          <span class="telegram-status" id="telegramStatus">Telegram: checking…</span>
+          <button class="modal-btn ghost" id="alertsTestBtn" type="button">Test message</button>
+          <button class="modal-close" id="alertsClose" type="button" aria-label="Close">×</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <!-- New alert form -->
+        <div class="alert-form">
+          <div class="form-row">
+            <label class="form-field">
+              <span>Source</span>
+              <select id="alfSource">
+                <option value="crypto">Crypto (Hyperliquid)</option>
+                <option value="us">US stocks</option>
+                <option value="india">India (NSE)</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>Symbol</span>
+              <input type="text" id="alfSymbol" placeholder="e.g. BTC, AAPL, RELIANCE" autocomplete="off" spellcheck="false"/>
+            </label>
+            <label class="form-field">
+              <span>Condition</span>
+              <select id="alfType">
+                <option value="price_above">Price &gt; (above)</option>
+                <option value="price_below">Price &lt; (below)</option>
+                <option value="pct_move">% move over N bars (≥)</option>
+                <option value="rsi_above">RSI(14) crosses above</option>
+                <option value="rsi_below">RSI(14) crosses below</option>
+                <option value="macd_bull">MACD bullish cross (line ↑ signal)</option>
+                <option value="macd_bear">MACD bearish cross (line ↓ signal)</option>
+                <option value="price_above_sma50">Price crosses above SMA 50</option>
+                <option value="price_below_sma50">Price crosses below SMA 50</option>
+              </select>
+            </label>
+            <label class="form-field" id="alfValueField">
+              <span id="alfValueLabel">Value</span>
+              <input type="number" id="alfValue" step="any" placeholder="e.g. 100000"/>
+            </label>
+            <label class="form-field" id="alfPeriodField" hidden>
+              <span>Lookback bars</span>
+              <input type="number" id="alfPeriod" step="1" value="5" min="1"/>
+            </label>
+          </div>
+          <div class="form-row form-row-actions">
+            <label class="form-check"><input type="checkbox" id="alfRepeating"/> Repeating (re-fires after cooldown)</label>
+            <button class="modal-btn primary" id="alertsAddBtn" type="button">+ Add alert</button>
+          </div>
+          <div class="alert-form-help">
+            Detection runs in the browser while the dashboard tab is open. The pane for this symbol must also be open
+            (i.e. one of your chart slots is showing it) — that's where the live data comes from.
+          </div>
+        </div>
+
+        <!-- Active alerts list -->
+        <div class="alerts-list" id="alertsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Projections modal ──────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="projectionsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="projectionsTitle">
+      <div class="modal-header">
+        <h2 id="projectionsTitle">Projections</h2>
+        <button class="modal-close" id="projectionsClose" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" id="projectionsContent"></div>
+    </div>
+  </div>
+
+  <!-- ── News modal (per-pane recent headlines) ─────────────────────────── -->
+  <div class="modal-backdrop" id="newsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+      <div class="modal-header">
+        <h2 id="newsTitle">News</h2>
+        <button class="modal-close" id="newsClose" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" id="newsContent"></div>
+    </div>
+  </div>
+
+  <!-- ── Stats modal (per-pane performance) ─────────────────────────────── -->
+  <div class="modal-backdrop" id="statsModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+      <div class="modal-header">
+        <h2 id="statsTitle">Stats</h2>
+        <button class="modal-close" id="statsClose" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" id="statsContent"></div>
+    </div>
+  </div>
+
+  <!-- ── Backtest modal ──────────────────────────────────────────────────── -->
+  <div class="modal-backdrop" id="backtestModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backtestTitle">
+      <div class="modal-header">
+        <h2 id="backtestTitle">Backtest</h2>
+        <div class="modal-header-right">
+          <button class="modal-close" id="backtestClose" type="button" aria-label="Close">×</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="alert-form">
+          <div class="form-row">
+            <label class="form-field">
+              <span>Strategy</span>
+              <select id="btStrategy">
+                <option value="xo">XO Trend (12, 25) — EMA crossover</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>Run on pane</span>
+              <select id="btPane"></select>
+            </label>
+            <label class="form-field">
+              <span>Initial capital</span>
+              <input type="number" id="btCapital" value="10000" step="100"/>
+            </label>
+            <label class="form-field">
+              <span>Slippage (bps)</span>
+              <input type="number" id="btSlippage" value="5" step="1" min="0" max="500" title="Basis points applied symmetrically on entry and exit. 1 bp = 0.01%. Stocks ~1–5 bps, crypto ~5–20 bps depending on liquidity."/>
+            </label>
+            <button class="modal-btn primary" id="btRunBtn" type="button">Run</button>
+          </div>
+          <div class="alert-form-help">
+            MVP backtest: long-only, full-balance trades on each Bull signal, exits on Bear signal.
+            No slippage, no commission, no leverage. Use for evaluating indicator signal quality —
+            <strong>not</strong> for actual trading decisions.
+          </div>
+        </div>
+        <div id="btResults"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pass server-side symbol lists to JS -->
+  <script>
+    const INDIAN_STOCKS       = {{ indian_stocks       | tojson }};
+    const US_STOCKS           = {{ us_stocks           | tojson }};
+    const CRYPTO_SYMBOLS      = {{ crypto_symbols      | tojson }};
+    const TIMEFRAMES          = {{ timeframes          | tojson }};
+    const INDIAN_STOCKS_NAMES = {{ indian_stocks_names | tojson }};
+    const US_STOCKS_NAMES     = {{ us_stocks_names     | tojson }};
+  </script>
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

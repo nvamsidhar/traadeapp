@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ pulse.meta.title }} — {{ pulse.meta.date }}</title>
+  <style>
+    :root{
+      --bg:#0a0a0f; --panel:#0f0f18; --panel2:#12121e; --border:#1c1c2c;
+      --ink:#e6e6ee; --muted:#8a8aa0; --faint:#61617a;
+      --up:#2ec785; --down:#f2506e; --amber:#e6b23a; --purple:#a866f0;
+      --blue:#5b7ff5; --grid:#1a1a28;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      background:var(--bg);color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased;line-height:1.55;padding-bottom:80px;
+    }
+    a{color:inherit}
+    .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+    /* Hero */
+    .hero{
+      background:linear-gradient(135deg,#12121f 0%,#0b0b13 60%);
+      border-bottom:1px solid var(--border);padding:34px 0 30px;margin-bottom:8px;
+    }
+    .hero .badge{display:inline-block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+      color:var(--blue);border:1px solid var(--border);border-radius:999px;padding:4px 12px;margin-bottom:14px}
+    .hero h1{font-size:34px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
+    .hero .sub{color:var(--muted);font-size:14px;margin-top:6px}
+    .hero .recv{color:var(--faint);font-size:12px;margin-top:14px;font-variant-numeric:tabular-nums}
+    .hero-tools{display:flex;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap}
+    .hero-tools .ht-lbl{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--faint)}
+    .hero-tools select,.hero-tools button{background:var(--panel2);color:var(--ink);border:1px solid var(--border);
+      border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
+    .hero-tools button:hover{border-color:#3a3a5a}
+    .hero-tools .ht-msg{font-size:11.5px;color:var(--faint)}
+    .live-tag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#08120c;
+      background:var(--up);border-radius:4px;padding:1px 6px;margin-left:8px;vertical-align:middle}
+    .approx-tag{color:var(--faint);font-size:11px;font-style:italic}
+    .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--up);
+      margin-left:8px;vertical-align:middle;box-shadow:0 0 0 0 rgba(46,199,133,.6);animation:pulse 2s infinite}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,199,133,.5)}70%{box-shadow:0 0 0 7px rgba(46,199,133,0)}100%{box-shadow:0 0 0 0 rgba(46,199,133,0)}}
+
+    /* Section scaffolding */
+    section{margin:34px 0}
+    .sec-head{display:flex;align-items:center;gap:10px;margin:0 0 16px}
+    .sec-head .dot{width:8px;height:8px;border-radius:2px;background:var(--blue)}
+    .sec-head h2{font-size:19px;font-weight:700;letter-spacing:-.2px}
+    .sec-head .tag{margin-left:auto;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:1px}
+
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 22px}
+    .card + .card{margin-top:14px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    p.note{color:var(--muted);font-size:14.5px;margin-top:12px}
+    p.note + p.note{margin-top:10px}
+    .lead p{font-size:15px;color:#cfcfe0}
+    .lead p + p{margin-top:12px}
+
+    /* Metric chips */
+    .metric{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+    .metric .k{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--faint)}
+    .metric .v{font-size:24px;font-weight:750;margin-top:4px;font-variant-numeric:tabular-nums}
+    .pos{color:var(--up)} .neg{color:var(--down)} .neu{color:var(--amber)}
+
+    /* Bar charts (horizontal) */
+    .hbar-row{display:grid;grid-template-columns:60px 1fr 78px;align-items:center;gap:10px;padding:3px 0}
+    .hbar-row .lbl{font-size:12.5px;color:var(--blue);text-align:right;font-weight:600}
+    .hbar-row .val{font-size:12px;color:var(--muted);text-align:left;font-variant-numeric:tabular-nums}
+    .hbar-track{position:relative;height:16px}
+    .hbar-track .zero{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--grid)}
+    .hbar{position:absolute;top:2px;height:12px;border-radius:3px}
+
+    /* Simple left-anchored bars (darkpool) */
+    .dp-row{display:grid;grid-template-columns:52px 1fr 66px;align-items:center;gap:8px;padding:2.5px 0}
+    .dp-row .lbl{font-size:12px;font-weight:600;text-align:right}
+    .dp-track{height:15px;background:#0c0c16;border-radius:3px;overflow:hidden}
+    .dp-fill{height:100%;border-radius:3px}
+    .dp-row .val{font-size:11.5px;text-align:left;font-variant-numeric:tabular-nums}
+
+    /* Sector table */
+    table.sect{width:100%;border-collapse:collapse;font-size:13px}
+    table.sect th{color:var(--faint);font-weight:600;text-transform:uppercase;font-size:10.5px;
+      letter-spacing:.8px;text-align:right;padding:8px 10px;border-bottom:1px solid var(--border)}
+    table.sect th:nth-child(1),table.sect th:nth-child(2){text-align:left}
+    table.sect td{padding:9px 10px;border-bottom:1px solid #14141f;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    table.sect td.sym{color:var(--blue);font-weight:700;text-align:left}
+    table.sect td.name{color:var(--ink);text-align:left}
+    table.sect tr:hover td{background:#101019}
+    .chg-pill{display:inline-block;min-width:64px;padding:2px 8px;border-radius:5px;font-weight:650;font-size:12px}
+    .cp-bar{position:relative;display:inline-block;width:78px;height:14px;border-radius:3px;background:var(--down);vertical-align:middle;overflow:hidden}
+    .cp-bar > span{position:absolute;left:0;top:0;bottom:0;background:var(--up)}
+    .cp-bar > b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+    .rng{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--faint)}
+    .rng .track{position:relative;width:70px;height:4px;border-radius:2px;background:#23233a}
+    .rng .dot{position:absolute;top:-2px;width:8px;height:8px;border-radius:50%;background:#9a9ab5;transform:translateX(-50%)}
+
+    /* Levels ladder */
+    .levels{display:flex;flex-direction:column;gap:6px}
+    .lvl{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--panel2)}
+    .lvl .px{font-size:17px;font-weight:750;width:96px;font-variant-numeric:tabular-nums}
+    .lvl .desc{font-size:13px;color:var(--muted)}
+    .lvl.res{border-left:3px solid var(--down)} .lvl.res .px{color:var(--down)}
+    .lvl.sup{border-left:3px solid var(--up)} .lvl.sup .px{color:var(--up)}
+    .lvl.spot{border-left:3px solid var(--blue);background:#12142a} .lvl.spot .px{color:var(--blue)}
+
+    /* Gauge */
+    .gauge-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .gauge-val{font-size:44px;font-weight:800;margin-top:-6px}
+    .gauge-lab{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);font-weight:700}
+
+    /* progress rows (sentiment) */
+    .prow{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:12px;padding:4px 0}
+    .prow .k{font-size:12.5px;color:var(--muted);text-align:right}
+    .ptrack{position:relative;height:20px;background:#0c0c16;border-radius:5px;overflow:hidden}
+    .pfill{height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:11px;font-weight:700;color:#08120c}
+
+    /* Zero/weekly tide cards */
+    .zw{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+    .zw h4{font-size:13px;color:var(--ink);margin-bottom:10px;text-transform:uppercase;letter-spacing:.6px}
+    .zw .pair{display:flex;gap:16px;margin-bottom:8px}
+    .zw .pair div{flex:1}
+    .zw .pair .k{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
+    .zw .pair .v{font-size:18px;font-weight:750;font-variant-numeric:tabular-nums}
+    .zw .n{font-size:12px;color:var(--muted);line-height:1.45}
+
+    /* Probability */
+    .prob{display:flex;flex-direction:column;gap:12px}
+    .prob-row .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+    .prob-row .lab{font-size:13.5px;color:var(--ink)}
+    .prob-row .pc{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+    .prob-track{height:10px;background:#0c0c16;border-radius:5px;overflow:hidden}
+    .prob-fill{height:100%;border-radius:5px}
+
+    .foot{text-align:center;color:var(--faint);font-size:13px;margin-top:40px;padding-top:20px;border-top:1px solid var(--border)}
+    .backlink{position:fixed;top:16px;left:16px;z-index:10;font-size:12px;color:var(--muted);
+      background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;text-decoration:none}
+    .backlink:hover{color:var(--ink);border-color:var(--border-control-h,#3a3a5a)}
+
+    /* SVG chart text */
+    text{fill:var(--faint);font-size:10px}
+    .axis-line{stroke:var(--grid);stroke-width:1}
+
+    @media(max-width:760px){
+      .grid2,.grid4{grid-template-columns:1fr}
+      .hero h1{font-size:26px}
+      table.sect .hide-sm{display:none}
+    }
+  </style>
+</head>
+<body>
+  <a class="backlink" href="/">← Dashboard</a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="wrap">
+      <span class="badge">{{ pulse.meta.subtitle }}</span>
+      <h1>{{ pulse.meta.title }}</h1>
+      <div class="sub">
+        <span id="liveClock">{{ pulse.meta.date }}</span>
+        <span class="live-dot" title="Live"></span>
+      </div>
+      {% if pulse.meta.report_date %}<div class="recv">Source report: {{ pulse.meta.report_date }} · Received {{ pulse.meta.received }}</div>
+      {% else %}<div class="recv">Received: {{ pulse.meta.received }}</div>{% endif %}
+      <div class="hero-tools">
+        {% if archive and archive|length %}
+        <label class="ht-lbl">Archive</label>
+        <select id="archiveSel" onchange="if(this.value)location.href=this.value">
+          <option value="/pulse" {{ 'selected' if not current else '' }}>Latest</option>
+          {% for d in archive %}
+          <option value="/pulse/{{ d }}" {{ 'selected' if current==d else '' }}>{{ d }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+        <button id="rebuildBtn" type="button" onclick="rebuildPulse(this)">↻ Rebuild from latest doc</button>
+        <span id="rebuildMsg" class="ht-msg"></span>
+        {% if pulse._built_at %}<span class="ht-msg">Built {{ pulse._built_at.replace('T',' ') }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- Indexes & Sectors intro -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Indexes and Sectors</h2></div>
+      <div class="card lead">
+        {% for p in pulse.intro %}<p>{{ p }}</p>{% endfor %}
+      </div>
+    </section>
+
+    <!-- Market Tide -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Market Tide — SPY</h2>
+        {% if pulse.market_tide.price_live %}<span class="tag">SPY <span class="live-tag">LIVE</span> · premiums from report</span>
+        {% else %}<span class="tag">Net Premiums</span>{% endif %}</div>
+      <div class="grid4" style="margin-bottom:14px">
+        <div class="metric"><div class="k">SPY</div><div class="v" id="mtSpy">{{ '%.2f'|format(pulse.market_tide.spy) }}</div></div>
+        <div class="metric"><div class="k">Change</div>
+          <div class="v {{ 'pos' if pulse.market_tide.change_pct>=0 else 'neg' }}" id="mtChg">{{ '%+.2f'|format(pulse.market_tide.change_pct) }}%</div></div>
+        <div class="metric"><div class="k">NPP · Net Put Prem</div>
+          <div class="v {{ 'neg' if pulse.market_tide.npp>=0 else 'pos' }}">{{ '%+g'|format(pulse.market_tide.npp) }}M</div></div>
+        <div class="metric"><div class="k">NCP · Net Call Prem</div>
+          <div class="v {{ 'pos' if pulse.market_tide.ncp>=0 else 'neg' }}">{{ '%+g'|format(pulse.market_tide.ncp) }}M</div></div>
+      </div>
+      <div class="card">
+        <canvas id="tideChart" height="240" style="width:100%;display:block"></canvas>
+        {% for n in pulse.market_tide.notes %}<p class="note">{{ n }}</p>{% endfor %}
+      </div>
+    </section>
+
+    <!-- Top Net Impact -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Top Net Impact</h2>
+        <span class="tag">Net Premium ($M)</span></div>
+      <div class="card">
+        <div id="niChart"></div>
+        <p class="note">{{ pulse.top_net_impact_note }}
+          {% if pulse.top_net_impact_approx %}<span class="approx-tag">· bar sizes approximated by rank (exact values are image-only in the source)</span>{% endif %}</p>
+      </div>
+    </section>
+
+    <!-- Sector Flow -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Sector Flow</h2>
+        {% if pulse.sectors_live %}<span class="tag">yfinance <span class="live-tag">LIVE</span></span>{% endif %}</div>
+      <div class="card" style="padding:8px 14px">
+        <table class="sect">
+          <thead><tr>
+            <th>Ticker</th><th>Sector</th><th>Last</th><th>Change</th>
+            <th class="hide-sm">Vol</th><th>Call/Put Prem</th><th class="hide-sm">52w Range</th>
+          </tr></thead>
+          <tbody>
+          {% for s in pulse.sectors %}
+            <tr>
+              <td class="sym">{{ s.sym }}</td>
+              <td class="name">{{ s.name }}</td>
+              <td>${{ '%.2f'|format(s.price) }}</td>
+              <td><span class="chg-pill" style="background:{{ 'rgba(46,199,133,.16)' if s.chg>=0 else 'rgba(242,80,110,.16)' }};color:{{ 'var(--up)' if s.chg>=0 else 'var(--down)' }}">{{ '%+.2f'|format(s.chg) }}%</span></td>
+              <td class="hide-sm">{{ s.vol }}</td>
+              <td><span class="cp-bar"><span style="width:{{ s.call_pct }}%"></span><b>{{ s.call_pct }}%</b></span></td>
+              <td class="hide-sm">
+                {% set frac = ((s.price - s.low) / (s.high - s.low) * 100)|round(0,'floor') %}
+                <span class="rng">{{ '%.0f'|format(s.low) }}
+                  <span class="track"><span class="dot" style="left:{{ [[frac,2]|max, 98]|min }}%"></span></span>
+                  {{ '%.0f'|format(s.high) }}</span>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- What I expect -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>What I Expect — Key Levels</h2>
+        <span class="tag">Main band {{ pulse.expectation.band }}</span></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="levels">
+            {% for l in pulse.expectation.levels %}
+            <div class="lvl {{ l.kind }}"><span class="px">{{ l.px }}</span><span class="desc">{{ l.label }}</span></div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="card lead">
+          {% for p in pulse.expectation.narrative %}<p style="font-size:14px">{{ p }}</p>{% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <!-- Zero / Weekly DTE Tide -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Zero / Weekly DTE Tide</h2></div>
+      <div class="grid4">
+        {% for z in pulse.zero_weekly %}
+        <div class="zw">
+          <h4>{{ z.name }}</h4>
+          <div class="pair">
+            <div><div class="k">NPP</div><div class="v {{ 'neg' if z.npp>=0 else 'pos' }}">{{ '%+g'|format(z.npp) }}M</div></div>
+            <div><div class="k">NCP</div><div class="v {{ 'pos' if z.ncp>=0 else 'neg' }}">{{ '%+g'|format(z.ncp) }}M</div></div>
+          </div>
+          <div class="n">{{ z.note }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="card" style="margin-top:14px"><p class="note" style="margin:0">{{ pulse.zero_weekly_note }}</p></div>
+    </section>
+
+    <!-- Gamma Map -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Gamma Map — SPY</h2>
+        {% if pulse.gamma.live %}<span class="tag">options-chain GEX <span class="live-tag">LIVE</span></span>
+        {% else %}<span class="tag">Regime: {{ pulse.gamma.regime }}</span>{% endif %}</div>
+      <div class="grid4" style="margin-bottom:14px">
+        {% set gpp_neg = pulse.gamma.oi.gpp.startswith('-') %}
+        <div class="metric"><div class="k">OI · Gamma / 1% {% if pulse.gamma.live %}<span class="live-tag">LIVE</span>{% endif %}</div><div class="v {{ 'neg' if gpp_neg else 'pos' }}" style="font-size:19px">{{ pulse.gamma.oi.gpp }}</div><div class="k" style="margin-top:6px">NGE {{ pulse.gamma.oi.nge }}</div></div>
+        <div class="metric"><div class="k">Volume · Gamma / 1% {% if pulse.gamma.live %}<span class="approx-tag">report</span>{% endif %}</div><div class="v neg" style="font-size:19px">{{ pulse.gamma.volume.gpp }}</div><div class="k" style="margin-top:6px">NGE {{ pulse.gamma.volume.nge }}</div></div>
+        <div class="metric"><div class="k">Directional · Gamma / 1% {% if pulse.gamma.live %}<span class="approx-tag">report</span>{% endif %}</div><div class="v pos" style="font-size:19px">{{ pulse.gamma.directional.gpp }}</div><div class="k" style="margin-top:6px">NGE {{ pulse.gamma.directional.nge }}</div></div>
+        <div class="metric" style="background:#12142a;border-color:#242449">
+          <div class="k">Heat Zones</div>
+          <div style="margin-top:6px;font-size:13px;line-height:1.9">
+            <div><span class="neg">Call wall</span> ${{ pulse.gamma.call_wall }}</div>
+            <div><span class="neu">Accel up</span> ${{ pulse.gamma.accel_up }}</div>
+            <div><span class="pos">Accel down</span> ${{ pulse.gamma.accel_down }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="gammaBand"></div>
+        {% for p in pulse.gamma.narrative %}<p class="note">{{ p }}</p>{% endfor %}
+      </div>
+    </section>
+
+    <!-- Darkpool -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Darkpool Flow</h2>
+        {% if pulse.darkpool_proxy %}<span class="tag">FINRA off-exchange {{ pulse.darkpool_date }} <span class="live-tag">LIVE</span></span>
+        {% else %}<span class="tag">EOD · top 25 by net premium</span>{% endif %}</div>
+      <div class="grid2">
+        <div class="card">
+          <div style="color:var(--up);font-weight:700;font-size:13px;letter-spacing:.5px;margin-bottom:10px">
+            {{ 'ACCUMULATION LEAN · LOW SHORT %' if pulse.darkpool_proxy else 'NET BUYING' }}</div>
+          <div id="dpBuy"></div>
+        </div>
+        <div class="card">
+          <div style="color:var(--down);font-weight:700;font-size:13px;letter-spacing:.5px;margin-bottom:10px">
+            {{ 'DISTRIBUTION LEAN · HIGH SHORT %' if pulse.darkpool_proxy else 'NET SELLING' }}</div>
+          <div id="dpSell"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        {% for p in pulse.darkpool_note %}<p class="note" {% if loop.first %}style="margin-top:0"{% endif %}>{{ p }}</p>{% endfor %}
+      </div>
+    </section>
+
+    <!-- Market Sentiment -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Market Sentiment</h2>
+        {% if pulse.sentiment.fear_greed_live %}<span class="tag">CNN <span class="live-tag">LIVE</span></span>
+        {% else %}<span class="tag">Fear &amp; Greed {{ pulse.sentiment.fear_greed }}</span>{% endif %}</div>
+      <div class="grid2">
+        <div class="card">
+          <div style="font-size:11px;letter-spacing:1.5px;color:var(--faint);text-transform:uppercase;margin-bottom:10px">Fear &amp; Greed Index</div>
+          <div class="gauge-wrap">
+            <svg id="gauge" width="300" height="170" viewBox="0 0 300 170"></svg>
+            <div class="gauge-val" id="gaugeVal">{{ pulse.sentiment.fear_greed }}</div>
+            <div class="gauge-lab" id="gaugeLab"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-size:11px;letter-spacing:1.5px;color:var(--faint);text-transform:uppercase;margin-bottom:14px">Category Breakdown</div>
+          {% for c in pulse.sentiment.category %}
+          <div class="prow"><div class="k">{{ c.name }}</div>
+            <div class="ptrack"><div class="pfill sent" data-v="{{ c.val }}" style="width:{{ c.val }}%">{{ '%g'|format(c.val) }}</div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div style="font-size:11px;letter-spacing:1.5px;color:var(--faint);text-transform:uppercase;margin-bottom:14px">Indicator Sentiment</div>
+        <div style="columns:2;column-gap:34px">
+          {% for i in pulse.sentiment.indicators %}
+          <div class="prow" style="break-inside:avoid"><div class="k">{{ i.name }}</div>
+            <div class="ptrack"><div class="pfill sent" data-v="{{ i.val }}" style="width:{{ i.val }}%">{{ '%g'|format(i.val) }}</div></div>
+          </div>
+          {% endfor %}
+        </div>
+        {% for p in pulse.sentiment.narrative %}<p class="note">{{ p }}</p>{% endfor %}
+      </div>
+    </section>
+
+    <!-- Batman Commentary -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>🦇 Batman Commentary</h2></div>
+      <div class="card lead">
+        {% for p in pulse.batman %}<p style="font-size:14.5px">{{ p }}</p>{% endfor %}
+      </div>
+    </section>
+
+    <!-- Probability Distribution -->
+    <section>
+      <div class="sec-head"><span class="dot"></span><h2>Probability Distribution</h2></div>
+      <div class="card">
+        <div class="prob">
+          {% for pr in pulse.probability %}
+          {% set col = 'var(--up)' if pr.kind=='up' else ('var(--down)' if pr.kind=='down' else 'var(--amber)') %}
+          <div class="prob-row">
+            <div class="top"><span class="lab">{{ pr.label }}</span><span class="pc" style="color:{{ col }}">{{ pr.pct }}%</span></div>
+            <div class="prob-track"><div class="prob-fill" style="width:{{ pr.pct }}%;background:{{ col }}"></div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <div class="foot">See you again in tomorrow's Market Pulse 🖤</div>
+  </div>
+
+  <script>
+    const PULSE = {{ pulse_json|safe }};
+
+    async function rebuildPulse(btn){
+      const msg=document.getElementById('rebuildMsg');
+      btn.disabled=true; msg.textContent='Rebuilding… (fetching live sectors)';
+      try{
+        const r=await fetch('/api/pulse/rebuild',{method:'POST'});
+        const j=await r.json();
+        if(j.ok){ msg.textContent='Done — reloading…'; setTimeout(()=>location.href='/pulse',600); }
+        else { msg.textContent='Error: '+(j.error||'failed'); btn.disabled=false; }
+      }catch(e){ msg.textContent='Error: '+e; btn.disabled=false; }
+    }
+
+    // Live header clock — never shows a stale date.
+    (function(){
+      const el=document.getElementById('liveClock');
+      function tick(){
+        const d=new Date();
+        el.textContent=d.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})
+          +' · '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      }
+      tick(); setInterval(tick,1000);
+    })();
+
+    // Poll lightweight live numbers (SPY price/change + Fear&Greed) in place.
+    (function(){
+      function paintGauge(v){
+        const segs=[{a:0,b:25,c:'#d94a4a',t:'EXTREME FEAR'},{a:25,b:45,c:'#e6862f',t:'FEAR'},
+                    {a:45,b:55,c:'#c9b23a',t:'NEUTRAL'},{a:55,b:75,c:'#7bbf46',t:'GREED'},
+                    {a:75,b:100,c:'#2ec785',t:'EXTREME GREED'}];
+        const cur=segs.find(s=>v>=s.a && v<s.b)||segs[segs.length-1];
+        const gv=document.getElementById('gaugeVal'), gl=document.getElementById('gaugeLab');
+        if(gv){gv.textContent=v; gv.style.color=cur.c;}
+        if(gl){gl.textContent=cur.t; gl.style.color=cur.c;}
+      }
+      async function poll(){
+        try{
+          const r=await fetch('/api/pulse/live'); const j=await r.json();
+          if(j.spy!=null){
+            const s=document.getElementById('mtSpy'); if(s) s.textContent=j.spy.toFixed(2);
+            const c=document.getElementById('mtChg');
+            if(c){ c.textContent=(j.change_pct>=0?'+':'')+j.change_pct.toFixed(2)+'%';
+                   c.className='v '+(j.change_pct>=0?'pos':'neg'); }
+          }
+          if(j.fear_greed!=null) paintGauge(j.fear_greed);
+        }catch(e){/* keep last values */}
+      }
+      poll(); setInterval(poll, 45000);
+    })();
+
+    // ── Fear & Greed gauge ────────────────────────────────────────────────
+    (function(){
+      const v = PULSE.sentiment.fear_greed;
+      const svg = document.getElementById('gauge');
+      const cx=150, cy=150, r=120, w=26;
+      const segs=[{a:0,b:25,c:'#d94a4a',t:'EXTREME FEAR'},{a:25,b:45,c:'#e6862f',t:'FEAR'},
+                  {a:45,b:55,c:'#c9b23a',t:'NEUTRAL'},{a:55,b:75,c:'#7bbf46',t:'GREED'},
+                  {a:75,b:100,c:'#2ec785',t:'EXTREME GREED'}];
+      const pol=(pct)=>{const ang=Math.PI*(1-pct/100);return [cx+r*Math.cos(ang), cy-r*Math.sin(ang)];};
+      const arc=(a,b,col)=>{
+        const [x1,y1]=pol(a),[x2,y2]=pol(b);
+        const large=(b-a)>50?1:0;
+        return `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${w}"/>`;
+      };
+      let html='';
+      segs.forEach(s=>html+=arc(s.a,s.b,s.c));
+      // needle
+      const [nx,ny]=pol(v);
+      html+=`<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`;
+      html+=`<circle cx="${cx}" cy="${cy}" r="6" fill="#fff"/>`;
+      // ticks
+      [0,25,50,75,100].forEach(t=>{const [tx,ty]=pol(t);
+        html+=`<text x="${tx}" y="${ty+ (t===50? -14 : 18)}" text-anchor="middle">${t}</text>`;});
+      svg.innerHTML=html;
+      const cur=segs.find(s=>v>=s.a && v<s.b) || segs[segs.length-1];
+      const lab=document.getElementById('gaugeLab'); lab.textContent=cur.t; lab.style.color=cur.c;
+      document.getElementById('gaugeVal').style.color=cur.c;
+    })();
+
+    // sentiment bar colours by value
+    document.querySelectorAll('.pfill.sent').forEach(el=>{
+      const v=+el.dataset.v;
+      const c = v>=60?'#2ec785' : v>=45?'#7bbf46' : v>=30?'#e6b23a' : v>=15?'#e6862f':'#d94a4a';
+      el.style.background=c;
+      if(v<18){el.style.color='#fff';}
+    });
+
+    // ── Top Net Impact horizontal bars ────────────────────────────────────
+    (function(){
+      const data=PULSE.top_net_impact;
+      const max=Math.max(...data.map(d=>Math.abs(d.val)));
+      const el=document.getElementById('niChart');
+      let html='';
+      data.forEach(d=>{
+        const pctW=Math.abs(d.val)/max*50; // half-width max
+        const col=d.val>=0?'var(--up)':'var(--down)';
+        const bar = d.val>=0
+          ? `<div class="hbar" style="left:50%;width:${pctW}%;background:${col}"></div>`
+          : `<div class="hbar" style="right:50%;width:${pctW}%;background:${col}"></div>`;
+        html+=`<div class="hbar-row"><div class="lbl">${d.sym}</div>
+          <div class="hbar-track"><div class="zero" style="left:50%"></div>${bar}</div>
+          <div class="val" style="text-align:right;color:${col}">${d.val>0?'+':''}${d.val}M</div></div>`;
+      });
+      el.innerHTML=html;
+    })();
+
+    // ── Darkpool bars ─────────────────────────────────────────────────────
+    const DP_UNIT = PULSE.darkpool_proxy ? ' sh' : '';
+    function fmtM(v){return (v>=1000 ? (v/1000).toFixed(2)+'B' : v.toFixed(1)+'M')+DP_UNIT;}
+    function dpBars(id,data,col){
+      if(!data||!data.length){document.getElementById(id).innerHTML=
+        '<div style="color:var(--faint);font-size:12px">No names on this side today.</div>';return;}
+      const max=Math.max(...data.map(d=>d.val));
+      let html='';
+      data.forEach(d=>{
+        const w=d.val/max*100;
+        html+=`<div class="dp-row"><div class="lbl" style="color:${col}">${d.sym}</div>
+          <div class="dp-track"><div class="dp-fill" style="width:${w}%;background:${col}"></div></div>
+          <div class="val" style="color:${col}">${fmtM(d.val)}</div></div>`;
+      });
+      document.getElementById(id).innerHTML=html;
+    }
+    dpBars('dpBuy', PULSE.darkpool_buys, 'var(--up)');
+    dpBars('dpSell', PULSE.darkpool_sells, 'var(--down)');
+
+    // ── Gamma price band (heat zones) ─────────────────────────────────────
+    (function(){
+      const g=PULSE.gamma;
+      // Derive the band range from the actual levels so live walls always fit.
+      const marks=[g.call_wall,g.accel_up,g.accel_down,g.spot].filter(v=>v!=null).map(Number);
+      const span=Math.max(...marks)-Math.min(...marks) || 10;
+      const hi=Math.max(...marks)+span*0.12, lo=Math.min(...marks)-span*0.12;
+      const pos=(p)=>((hi-p)/(hi-lo)*100);
+      const bandRow=(p,label,col)=>`
+        <div style="position:absolute;left:0;right:0;top:${pos(p)}%;height:0;">
+          <div style="border-top:2px dashed ${col};"></div>
+          <div style="position:absolute;right:6px;top:-16px;font-size:11px;color:${col};font-weight:700">${label} $${p}</div>
+        </div>`;
+      const el=document.getElementById('gammaBand');
+      el.innerHTML=`
+        <div style="position:relative;height:150px;border-radius:10px;overflow:hidden;
+          background:linear-gradient(to bottom,
+            rgba(242,80,110,.30) 0%, rgba(242,80,110,.10) 30%,
+            rgba(91,127,245,.14) 45%, rgba(91,127,245,.14) 58%,
+            rgba(46,199,133,.10) 72%, rgba(46,199,133,.30) 100%);
+          border:1px solid var(--border)">
+          ${bandRow(g.call_wall,'Call Wall','#f2506e')}
+          ${bandRow(g.accel_up,'Accel ↑','#e6b23a')}
+          ${bandRow(g.spot,'Spot','#8ea2ff')}
+          ${bandRow(g.accel_down,'Accel ↓','#2ec785')}
+        </div>`;
+    })();
+
+    // ── Market Tide line chart ────────────────────────────────────────────
+    // Illustrative intraday NPP/NCP paths: seeded random walks scaled to end
+    // at the reported end-of-day values. Not tick data — the source report
+    // only publishes the closing NPP/NCP figures.
+    (function(){
+      const cv=document.getElementById('tideChart');
+      const dpr=window.devicePixelRatio||1;
+      const W=cv.clientWidth||900, H=240, padL=6, padR=52, padT=16, padB=22;
+      cv.width=W*dpr; cv.height=H*dpr;
+      const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr);
+      const N=130;
+      function walk(end, seed){
+        let s=seed, out=[], x=0;
+        const rnd=()=>{s=(s*9301+49297)%233280; return s/233280;};
+        for(let i=0;i<N;i++){ x+=(rnd()-0.5)*22; out.push(x); }
+        const last=out[N-1]||1;
+        // ease so the path drifts to `end` by the close
+        return out.map((v,i)=>{ const t=i/(N-1); return v*(1-t) + end*t + (v-last)*0.15*(1-t); });
+      }
+      const npp=walk(PULSE.market_tide.npp, 71);
+      const ncp=walk(PULSE.market_tide.ncp, 913);
+      const all=npp.concat(ncp).concat([0]);
+      const mn=Math.min(...all), mx=Math.max(...all);
+      const X=i=>padL+(W-padL-padR)*i/(N-1);
+      const Y=v=>padT+(H-padT-padB)*(1-(v-mn)/(mx-mn||1));
+      // grid + zero line
+      ctx.strokeStyle='#1a1a28'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(padL,Y(0)); ctx.lineTo(W-padR,Y(0)); ctx.stroke();
+      ctx.fillStyle='#61617a'; ctx.font='10px sans-serif'; ctx.textAlign='left';
+      [mx,0,mn].forEach(v=>{ ctx.fillText((v>0?'+':'')+Math.round(v)+'M', W-padR+6, Y(v)+3); });
+      // time axis
+      ['9:30','11:00','12:30','14:00','15:57'].forEach((t,i,a)=>{
+        const x=padL+(W-padL-padR)*i/(a.length-1);
+        ctx.textAlign=i===0?'left':(i===a.length-1?'right':'center');
+        ctx.fillText(t, x, H-6);
+      });
+      function line(arr,col){
+        ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.beginPath();
+        arr.forEach((v,i)=>{ i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)); });
+        ctx.stroke();
+        // end dot + label
+        ctx.fillStyle=col; ctx.beginPath(); ctx.arc(X(N-1),Y(arr[N-1]),3,0,7); ctx.fill();
+      }
+      line(ncp, '#2ec785');  // Net Call Premium (green)
+      line(npp, '#f2506e');  // Net Put Premium (red)
+      // legend
+      ctx.textAlign='left'; ctx.font='11px sans-serif';
+      ctx.fillStyle='#f2506e'; ctx.fillText('■ Net Put Prem', padL+4, padT-2);
+      ctx.fillStyle='#2ec785'; ctx.fillText('■ Net Call Prem', padL+104, padT-2);
+    })();
+  </script>
+</body>
+</html>

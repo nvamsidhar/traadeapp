@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Start-Process python -ArgumentList \"app.py\" -WorkingDirectory \"C:\\\\Users\\\\suhas\\\\trading_dashboard\" -WindowStyle Hidden; Start-Sleep -Seconds 4; try { $r = Invoke-WebRequest -Uri \"http://127.0.0.1:5000/pulse\" -UseBasicParsing -TimeoutSec 10; Write-Output \"STATUS $\\($r.StatusCode\\) LEN $\\($r.Content.Length\\)\" } catch { Write-Output \"ERR $_\" })",
+      "Bash(timeout 90 python pulse_sources.py)",
+      "Bash(timeout 90 python -c ' *)"
+    ]
+  }
+}

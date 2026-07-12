@@ -1,0 +1,27 @@
+# --- Secrets / environment ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+ENV/
+
+# --- Claude Code local settings ---
+.claude/settings.local.json
+
+# --- Runtime-generated data ---
+alerts.json
+pulse_reports/*.json
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
