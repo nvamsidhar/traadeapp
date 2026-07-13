@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Option Chain — Trading Dashboard</title>
+  <style>
+    :root{--bg:#0c0c14;--panel:#111120;--panel2:#0f0f1a;--border:#1a1a2e;--text:#c7c7d9;--muted:#6a6a86;--accent:#3b5ff5;--up:#22c55e;--down:#ef4444;--warn:#f59e0b;--call:#f59e0b;--put:#6366f1}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+    a{color:var(--accent);text-decoration:none}
+    .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel2);position:sticky;top:0;z-index:20}
+    .logo{font-weight:600}.logo .accent{color:var(--accent)}.spacer{flex:1}
+    .wrap{max-width:1120px;margin:0 auto;padding:20px}
+    h1{font-size:20px;margin:2px 0}.sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+    .warn-box{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fbbf24;border-radius:8px;padding:10px 13px;font-size:12.5px;margin-bottom:16px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+    select,input,button{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 11px;font-size:13px;font-family:inherit}
+    button{cursor:pointer}.btn{background:var(--accent);color:#fff;border:none;font-weight:600}.btn:hover{background:#2f4fe0}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:6px}
+    .kpi{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+    .kpi span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+    .kpi strong{font-size:17px}
+    table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+    th,td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:right}
+    th{color:var(--muted);font-weight:500;font-size:10px;text-transform:uppercase;position:sticky;top:0;background:var(--panel2)}
+    .strike{text-align:center;font-weight:700;background:var(--panel2)}
+    .atm td{background:rgba(59,95,245,.14)}
+    .ce{color:#fbbf24}.pe{color:#8aa0ff}
+    .up{color:var(--up)}.down{color:var(--down)}
+    .tbl-wrap{max-height:600px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+    .msg{padding:16px;color:var(--muted)}.msg.err{color:var(--down)}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">NSE <span class="accent">Option Chain</span></span>
+    <span class="spacer"></span>
+    <a href="/portfolio">Portfolio</a><a href="/">← Dashboard</a>
+  </header>
+
+  <div class="wrap">
+    <h1>Option Chain — NIFTY / BANKNIFTY / equities</h1>
+    <p class="sub">Live OI, IV, LTP with PCR and max-pain, straight from NSE.</p>
+    <div class="warn-box">⚠ NSE blocks non-India / datacenter traffic, so this only works when the dashboard runs from an <b>Indian residential IP</b>. If you see a fetch error, that's why — it's not a bug in the page.</div>
+
+    <div class="card">
+      <div class="controls">
+        <select id="symbol">
+          <option>NIFTY</option><option>BANKNIFTY</option><option>FINNIFTY</option><option>MIDCPNIFTY</option>
+        </select>
+        <input id="custom" placeholder="or equity e.g. RELIANCE" style="width:190px"/>
+        <button class="btn" id="go">Load chain</button>
+        <span id="meta" class="muted" style="color:var(--muted);font-size:12px"></span>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const num = (n,d=0) => n==null||isNaN(n)?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+    const oi = n => n==null?'—':(Math.abs(n)>=1e5?(n/1e5).toFixed(1)+'L':num(n));
+    const chg = n => n==null?'—':`<span class="${n>=0?'up':'down'}">${n>=0?'+':''}${oi(n)}</span>`;
+
+    async function load() {
+      const sym = ($('custom').value.trim() || $('symbol').value).toUpperCase();
+      $('results').innerHTML = '<div class="card"><div class="msg">Loading option chain from NSE…</div></div>';
+      $('kpis').innerHTML=''; $('meta').textContent='';
+      try {
+        const d = await (await fetch('/api/nse/optionchain?symbol=' + encodeURIComponent(sym))).json();
+        if (!d.ok) throw new Error(d.error || 'failed');
+        render(d);
+      } catch(e) {
+        $('results').innerHTML = `<div class="card"><div class="msg err">⚠ ${e.message}</div></div>`;
+      }
+    }
+
+    function render(d) {
+      $('meta').textContent = `${d.symbol} · spot ${num(d.underlying,2)} · expiry ${d.expiry}`;
+      const pcrClass = d.pcr>1 ? 'up' : d.pcr!=null ? 'down' : '';
+      $('kpis').innerHTML = [
+        ['Spot', num(d.underlying,2)],
+        ['ATM strike', num(d.atm)],
+        ['PCR (OI)', `<span class="${pcrClass}">${d.pcr??'—'}</span>`],
+        ['Max pain', num(d.maxPain)],
+        ['Total CE OI', oi(d.totalCeOi)],
+        ['Total PE OI', oi(d.totalPeOi)],
+      ].map(([l,v])=>`<div class="kpi"><span>${l}</span><strong>${v}</strong></div>`).join('');
+
+      const rows = d.rows.map(r => `
+        <tr class="${r.strike===d.atm?'atm':''}">
+          <td class="ce">${chg(r.ce.chgOi)}</td>
+          <td class="ce">${oi(r.ce.oi)}</td>
+          <td class="ce">${r.ce.iv!=null?r.ce.iv.toFixed(1):'—'}</td>
+          <td class="ce">${num(r.ce.ltp,2)}</td>
+          <td class="strike">${num(r.strike)}</td>
+          <td class="pe">${num(r.pe.ltp,2)}</td>
+          <td class="pe">${r.pe.iv!=null?r.pe.iv.toFixed(1):'—'}</td>
+          <td class="pe">${oi(r.pe.oi)}</td>
+          <td class="pe">${chg(r.pe.chgOi)}</td>
+        </tr>`).join('');
+
+      $('results').innerHTML = `<div class="card"><div class="tbl-wrap"><table>
+        <thead><tr>
+          <th class="ce">CE ΔOI</th><th class="ce">CE OI</th><th class="ce">CE IV</th><th class="ce">CE LTP</th>
+          <th class="strike">Strike</th>
+          <th class="pe">PE LTP</th><th class="pe">PE IV</th><th class="pe">PE OI</th><th class="pe">PE ΔOI</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div></div>`;
+    }
+
+    $('go').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

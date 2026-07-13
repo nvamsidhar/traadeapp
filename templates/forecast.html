@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forecast Cone — Trading Dashboard</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root{--bg:#0c0c14;--panel:#111120;--panel2:#0f0f1a;--border:#1a1a2e;--text:#c7c7d9;--muted:#6a6a86;--accent:#3b5ff5;--up:#22c55e;--down:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+    a{color:var(--accent);text-decoration:none}
+    .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel2);position:sticky;top:0;z-index:20}
+    .logo{font-weight:600}.logo .accent{color:var(--accent)}.spacer{flex:1}
+    .wrap{max-width:1080px;margin:0 auto;padding:20px}
+    h1{font-size:20px;margin:2px 0}.sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+    .f{display:flex;flex-direction:column;gap:5px}
+    .f label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+    select,input{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px 10px;font-size:13px}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;margin-left:auto}.btn:hover{background:#2f4fe0}.btn:disabled{opacity:.5}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+    .kpi{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:11px 13px}
+    .kpi span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+    .kpi strong{font-size:17px}.up{color:var(--up)}.down{color:var(--down)}
+    #chart{height:400px;width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px}
+    .legend{font-size:12px;color:var(--muted);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap}
+    .legend b{font-weight:600}
+    .msg{padding:16px;color:var(--muted)}.msg.err{color:var(--down)}
+    .disclaimer{margin-top:14px;font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;line-height:1.5}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">Forecast <span class="accent">Cone</span></span>
+    <span class="spacer"></span>
+    <a href="/backtest">Backtest Lab</a><a href="/perp">Perp Radar</a><a href="/">← Dashboard</a>
+  </header>
+
+  <div class="wrap">
+    <h1>Probabilistic Price Forecast</h1>
+    <p class="sub">A geometric-Brownian-motion projection: the median path plus 68% and 95% confidence bands that widen with √time. It's a <em>distribution of outcomes</em>, not a prediction.</p>
+
+    <div class="card">
+      <div class="controls">
+        <div class="f"><label>Source</label><select id="source"><option value="crypto">Crypto</option><option value="us" selected>US</option><option value="india">India</option></select></div>
+        <div class="f"><label>Symbol</label><input id="symbol" list="syms" value="AAPL"/><datalist id="syms"></datalist></div>
+        <div class="f"><label>Interval</label><select id="interval"></select></div>
+        <div class="f"><label>Horizon (bars)</label><input id="horizon" type="number" value="30" min="1" max="120" style="width:90px"/></div>
+        <button class="btn" id="go">Forecast</button>
+      </div>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const SYMS = { crypto: {{ crypto_symbols | tojson }}, us: {{ us_stocks | tojson }}, india: {{ indian_stocks | tojson }} };
+    const TIMEFRAMES = {{ timeframes | tojson }};
+    const $ = id => document.getElementById(id);
+    TIMEFRAMES.forEach(t => $('interval').add(new Option(t, t))); $('interval').value = '1d';
+    const num = (n,d=2) => n==null||isNaN(n)?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+    const pct = n => n==null||isNaN(n)?'—':(n>=0?'+':'')+num(n)+'%';
+
+    function fillSyms(){ $('syms').innerHTML = (SYMS[$('source').value]||[]).map(s=>`<option value="${s.replace('.NS','')}">`).join(''); }
+    $('source').addEventListener('change', fillSyms); fillSyms();
+
+    let chart;
+    function draw(d){
+      const el = $('chart');
+      if(chart){ chart.remove(); chart=null; }
+      chart = LightweightCharts.createChart(el, {
+        layout:{background:{color:'transparent'},textColor:'#6a6a86'},
+        grid:{vertLines:{color:'transparent'},horzLines:{color:'#1a1a2e'}},
+        rightPriceScale:{borderColor:'#1a1a2e'}, timeScale:{borderColor:'#1a1a2e',timeVisible:false},
+        height:el.clientHeight, width:el.clientWidth,
+      });
+      const line=(color,w,style)=>chart.addLineSeries({color,lineWidth:w,lineStyle:style??0,priceLineVisible:false,lastValueVisible:false});
+      // history
+      const h=chart.addLineSeries({color:'#c7c7d9',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+      h.setData(d.history);
+      const lastT=d.history[d.history.length-1].time, lastV=d.history[d.history.length-1].value;
+      const seed=(arr)=>[{time:lastT,value:lastV},...arr];
+      line('#ef4444',1,2).setData(seed(d.forecast.map(f=>({time:f.time,value:f.u95}))));
+      line('#22c55e',1,2).setData(seed(d.forecast.map(f=>({time:f.time,value:f.l95}))));
+      line('#f59e0b',1,0).setData(seed(d.forecast.map(f=>({time:f.time,value:f.u68}))));
+      line('#f59e0b',1,0).setData(seed(d.forecast.map(f=>({time:f.time,value:f.l68}))));
+      line('#3b5ff5',2,1).setData(seed(d.forecast.map(f=>({time:f.time,value:f.median}))));
+      chart.timeScale().fitContent();
+    }
+    new ResizeObserver(()=>{ if(chart) chart.applyOptions({width:$('chart').clientWidth,height:$('chart').clientHeight}); }).observe(document.body);
+
+    async function run(){
+      const q=new URLSearchParams({source:$('source').value,symbol:$('symbol').value.trim(),interval:$('interval').value,horizon:$('horizon').value});
+      $('go').disabled=true; $('go').textContent='…';
+      $('results').innerHTML='<div class="card"><div class="msg">Projecting…</div></div>';
+      try{
+        const d=await (await fetch('/api/forecast?'+q)).json();
+        if(!d.ok) throw new Error(d.error||'failed');
+        const last=d.forecast[d.forecast.length-1];
+        const chgMed=(last.median/d.spot-1)*100;
+        $('results').innerHTML=`
+          <div class="card">
+            <div class="kpis">
+              <div class="kpi"><span>Spot</span><strong>${num(d.spot)}</strong></div>
+              <div class="kpi"><span>Drift (${d.annualized?'ann.':'per bar'})</span><strong class="${d.driftAnnPct>=0?'up':'down'}">${pct(d.driftAnnPct)}</strong></div>
+              <div class="kpi"><span>Volatility (${d.annualized?'ann.':'per bar'})</span><strong>${num(d.volAnnPct)}%</strong></div>
+              <div class="kpi"><span>Median @ +${d.forecast.length} bars</span><strong class="${chgMed>=0?'up':'down'}">${num(last.median)} (${pct(chgMed)})</strong></div>
+              <div class="kpi"><span>95% range @ end</span><strong>${num(last.l95)} – ${num(last.u95)}</strong></div>
+            </div>
+            <div id="chart"></div>
+            <div class="legend">
+              <span><b style="color:#c7c7d9">━</b> history</span>
+              <span><b style="color:#3b5ff5">┄</b> median</span>
+              <span><b style="color:#f59e0b">━</b> 68% band</span>
+              <span><b style="color:#22c55e">┄</b> / <b style="color:#ef4444">┄</b> 95% band</span>
+            </div>
+            <div class="disclaimer">GBM assumes returns are random with constant drift/volatility — it captures <b>uncertainty growth</b>, not trends, news, or mean-reversion. The wider the cone, the less any single price matters. Not a trade signal.</div>
+          </div>`;
+        draw(d);
+      }catch(e){ $('results').innerHTML=`<div class="card"><div class="msg err">⚠ ${e.message}</div></div>`; }
+      finally{ $('go').disabled=false; $('go').textContent='Forecast'; }
+    }
+    $('go').addEventListener('click', run);
+    run();
+  </script>
+</body>
+</html>

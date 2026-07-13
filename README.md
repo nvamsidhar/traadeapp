@@ -213,6 +213,8 @@ A live analytics board for Hyperliquid perpetuals at `/perp` (or **PERP RADAR �
 - **Portfolio Lab** (`/portfolio`) — track holdings (kept in your browser), live P&L and allocation, a **correlation heatmap** across your book, and a **max-Sharpe rebalance** suggestion (PyPortfolioOpt). Module: `portfolio.py`; `POST /api/portfolio/analyze`.
 - **Earnings Calendar** (`/calendar`) — upcoming earnings dates + last surprise for your names, fetched concurrently from yfinance (no API key). Module: `earnings.py`; `POST /api/calendar/earnings`.
 - **News sentiment** — the per-symbol News modal now shows a VADER badge per headline + an overall tone, using a **finance-tuned lexicon** (so "beats / crushes / soars" read bullish, not violent). Module: `sentiment.py`.
+- **Forecast Cone** (`/forecast`) — a geometric-Brownian-motion projection: median path + 68%/95% confidence bands that widen with √time. Honest about uncertainty (a distribution, not a call) and dependency-free. Module: `forecast.py`; `GET /api/forecast`.
+- **NSE Option Chain** (`/options`) — NIFTY/BANKNIFTY & equity chains with OI/IV/LTP, PCR and max-pain. Module: `nse_data.py`; `GET /api/nse/optionchain`. ⚠️ NSE blocks datacenter/non-India IPs, so this only works when run from an **Indian residential connection** (fails cleanly otherwise).
 
 ---
 

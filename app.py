@@ -325,6 +325,47 @@ def api_calendar_earnings():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+# ── v2 backlog: NSE option chain (best-effort; NSE blocks non-India IPs) ──────
+
+@app.route("/options")
+def options_page():
+    return render_template("options.html")
+
+
+@app.route("/api/nse/optionchain")
+def api_nse_optionchain():
+    import nse_data
+    symbol = request.args.get("symbol", "NIFTY")
+    try:
+        return jsonify(nse_data.fetch_option_chain(symbol))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+
+
+# ── v2 backlog: probabilistic forecast cone (GBM) ────────────────────────────
+
+@app.route("/forecast")
+def forecast_page():
+    return render_template(
+        "forecast.html",
+        us_stocks=US_STOCKS, indian_stocks=INDIAN_STOCKS,
+        crypto_symbols=CRYPTO_SYMBOLS, timeframes=TIMEFRAMES,
+    )
+
+
+@app.route("/api/forecast")
+def api_forecast():
+    import forecast as fc
+    source = request.args.get("source", "us")
+    symbol = request.args.get("symbol", "AAPL")
+    interval = request.args.get("interval", "1d")
+    horizon = max(1, min(120, int(request.args.get("horizon", 30))))
+    try:
+        return jsonify(fc.forecast(source, symbol, interval, horizon))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 # ── Telegram alert proxy ─────────────────────────────────────────────────────
 
 def _send_telegram(text: str) -> tuple[bool, str]:
