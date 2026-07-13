@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perp Radar — Hyperliquid Funding &amp; OI</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root{
+      --bg:#0c0c14; --panel:#111120; --panel2:#0f0f1a; --border:#1a1a2e;
+      --text:#c7c7d9; --muted:#6a6a86; --accent:#3b5ff5;
+      --up:#22c55e; --down:#ef4444; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+    a{color:var(--accent);text-decoration:none}
+    .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;
+      border-bottom:1px solid var(--border);background:var(--panel2);position:sticky;top:0;z-index:20}
+    .logo{font-weight:600}.logo .accent{color:var(--accent)}
+    .spacer{flex:1}
+    .live-dot{width:8px;height:8px;border-radius:50%;background:var(--up);display:inline-block;
+      box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse 2s infinite}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+    .updated{font-size:12px;color:var(--muted)}
+    .wrap{max-width:1280px;margin:0 auto;padding:20px}
+
+    .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+    .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 15px}
+    .kpi span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+    .kpi strong{font-size:19px;font-weight:600}
+
+    .cols{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+    @media(max-width:920px){.cols{grid-template-columns:1fr}}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+    .card h2{margin:0 0 12px;font-size:14px}
+    .card h2 small{color:var(--muted);font-weight:400;font-size:12px}
+
+    .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+    input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+      border-radius:7px;padding:8px 10px;font-size:13px}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    #search{flex:1;min-width:130px}
+
+    .tbl-wrap{max-height:560px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    th,td{padding:8px 11px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+    th{position:sticky;top:0;background:var(--panel2);color:var(--muted);font-weight:500;
+      text-transform:uppercase;font-size:10.5px;letter-spacing:.3px;cursor:pointer;user-select:none}
+    th:first-child,td:first-child{text-align:left}
+    th.active{color:var(--text)}
+    tbody tr{cursor:pointer}
+    tbody tr:hover{background:var(--panel2)}
+    tbody tr.sel{background:rgba(59,95,245,.12)}
+    .coin{font-weight:600;color:var(--text)}
+    .up{color:var(--up)}.down{color:var(--down)}.warn{color:var(--warn)}
+    .fund-pos{color:#fb7185;font-weight:600}   /* longs pay — crowded long */
+    .fund-neg{color:#34d399;font-weight:600}   /* shorts pay */
+
+    .legend{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:0}
+    .extremes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+    .chip{display:flex;justify-content:space-between;padding:6px 9px;border:1px solid var(--border);
+      border-radius:6px;margin-bottom:6px;font-size:12.5px;cursor:pointer;background:var(--panel2)}
+    .chip:hover{border-color:var(--accent)}
+    .chip b{color:var(--text)}
+
+    #fundChart{height:220px;width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;margin-top:6px}
+    .detail-stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+    .ds{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:9px 11px}
+    .ds span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+    .ds strong{font-size:15px}
+    .countdown{font-variant-numeric:tabular-nums}
+    .msg{padding:16px;color:var(--muted)}.msg.err{color:var(--down)}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">Perp <span class="accent">Radar</span></span>
+    <span class="updated"><span class="live-dot"></span> Hyperliquid · <span id="updated">loading…</span></span>
+    <span class="spacer"></span>
+    <a href="/backtest">Backtest Lab</a>
+    <a href="/">← Dashboard</a>
+  </header>
+
+  <div class="wrap">
+    <div class="strip" id="strip"></div>
+
+    <div class="extremes">
+      <div class="card">
+        <h2>🔥 Crowded longs <small>— highest funding (longs paying)</small></h2>
+        <div id="hotList"></div>
+      </div>
+      <div class="card">
+        <h2>🧊 Shorts paying <small>— most negative funding</small></h2>
+        <div id="coldList"></div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="card">
+        <div class="controls">
+          <input id="search" placeholder="Search coin… (BTC, HYPE, SOL)" autocomplete="off"/>
+          <select id="minOi">
+            <option value="0">All coins</option>
+            <option value="1000000" selected>OI ≥ $1M</option>
+            <option value="10000000">OI ≥ $10M</option>
+            <option value="100000000">OI ≥ $100M</option>
+          </select>
+        </div>
+        <div class="tbl-wrap">
+          <table id="tbl">
+            <thead><tr>
+              <th data-k="coin">Coin</th>
+              <th data-k="mark">Mark</th>
+              <th data-k="change24h">24h</th>
+              <th data-k="fundingApr" class="active">Funding APR</th>
+              <th data-k="oiUsd">Open Int.</th>
+              <th data-k="volUsd">24h Vol</th>
+              <th data-k="fundingSpread">vs Binance</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="7" class="msg">Loading perps…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="legend">
+          <span class="dot" style="background:#fb7185"></span> positive funding = longs pay shorts (crowded long, squeeze risk) &nbsp;·&nbsp;
+          <span class="dot" style="background:#34d399"></span> negative = shorts pay (you get paid to hold longs).
+          <br><b>vs Binance</b> = HL funding APR − Binance funding APR (spread = cross-venue carry).
+        </div>
+      </div>
+
+      <div class="card" id="detail">
+        <h2 id="detailTitle">Select a coin</h2>
+        <div id="fundChart"></div>
+        <div class="detail-stats" id="detailStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let ROWS = [], sortKey = 'fundingApr', sortDir = -1, selected = null, chart, series, cdTimer;
+
+    // ── formatters ────────────────────────────────────────────────────────
+    const usd = n => {
+      if (n == null || isNaN(n)) return '—';
+      const a = Math.abs(n);
+      if (a >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+      if (a >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+      return '$' + n.toFixed(0);
+    };
+    const price = n => n == null ? '—' : n.toLocaleString('en-US',
+      { minimumFractionDigits: n>=1000?1:n>=1?3:6, maximumFractionDigits: n>=1000?1:n>=1?3:6 });
+    const pct = (n,d=2) => n == null || isNaN(n) ? '—' : (n>=0?'+':'') + n.toFixed(d) + '%';
+    const fundCls = n => n == null ? '' : (n >= 0 ? 'fund-pos' : 'fund-neg');
+    const chgCls = n => n == null ? '' : (n >= 0 ? 'up' : 'down');
+
+    // ── fetch + render ────────────────────────────────────────────────────
+    async function load() {
+      try {
+        const r = await fetch('/api/perp/contexts');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'fetch failed');
+        ROWS = d.rows;
+        $('updated').textContent = 'updated ' + new Date(d.time).toLocaleTimeString();
+        renderStrip(d.summary);
+        renderExtremes();
+        renderTable();
+        if (!selected && ROWS.length) selectCoin(ROWS[0].coin);
+      } catch (e) {
+        $('tbody').innerHTML = `<tr><td colspan="7" class="msg err">⚠ ${e.message}</td></tr>`;
+      }
+    }
+
+    function renderStrip(s) {
+      if (!s) return;
+      $('strip').innerHTML = [
+        ['Total Open Interest', usd(s.totalOiUsd)],
+        ['24h Volume', usd(s.totalVolUsd)],
+        ['Perps', s.coins],
+        ['Avg Funding APR', pct(s.avgFundingApr)],
+        [`🔥 ${s.hottest.coin}`, pct(s.hottest.apr,1)],
+        [`🧊 ${s.coldest.coin}`, pct(s.coldest.apr,1)],
+      ].map(([l,v]) => `<div class="kpi"><span>${l}</span><strong>${v}</strong></div>`).join('');
+    }
+
+    function renderExtremes() {
+      const liquid = ROWS.filter(r => r.oiUsd > 1e6);
+      const hot = [...liquid].sort((a,b)=>b.fundingApr-a.fundingApr).slice(0,6);
+      const cold = [...liquid].sort((a,b)=>a.fundingApr-b.fundingApr).slice(0,6);
+      const chip = r => `<div class="chip" onclick="selectCoin('${r.coin}')"><b>${r.coin}</b>
+        <span class="${fundCls(r.fundingApr)}">${pct(r.fundingApr,1)}</span></div>`;
+      $('hotList').innerHTML = hot.map(chip).join('');
+      $('coldList').innerHTML = cold.map(chip).join('');
+    }
+
+    function renderTable() {
+      const q = $('search').value.trim().toUpperCase();
+      const minOi = Number($('minOi').value);
+      let rows = ROWS.filter(r => r.oiUsd >= minOi && (!q || r.coin.includes(q)));
+      rows.sort((a,b) => {
+        const av = a[sortKey] ?? -Infinity, bv = b[sortKey] ?? -Infinity;
+        return (av < bv ? -1 : av > bv ? 1 : 0) * sortDir;
+      });
+      document.querySelectorAll('th').forEach(th => th.classList.toggle('active', th.dataset.k === sortKey));
+      $('tbody').innerHTML = rows.map(r => `
+        <tr class="${r.coin===selected?'sel':''}" onclick="selectCoin('${r.coin}')">
+          <td class="coin">${r.coin}</td>
+          <td>${price(r.mark)}</td>
+          <td class="${chgCls(r.change24h)}">${pct(r.change24h)}</td>
+          <td class="${fundCls(r.fundingApr)}">${pct(r.fundingApr,1)}</td>
+          <td>${usd(r.oiUsd)}</td>
+          <td>${usd(r.volUsd)}</td>
+          <td class="${r.fundingSpread==null?'':chgCls(r.fundingSpread)}">${r.fundingSpread==null?'—':pct(r.fundingSpread,1)}</td>
+        </tr>`).join('') || '<tr><td colspan="7" class="msg">No coins match.</td></tr>';
+    }
+
+    // ── detail panel + funding chart ──────────────────────────────────────
+    async function selectCoin(coin) {
+      selected = coin;
+      renderTable();
+      const r = ROWS.find(x => x.coin === coin);
+      $('detailTitle').innerHTML = `${coin} <small style="color:var(--muted)">· ${price(r.mark)}</small>`;
+      $('detailStats').innerHTML = [
+        ['Funding / hr', `<span class="${fundCls(r.fundingHr)}">${pct(r.fundingHr,4)}</span>`],
+        ['Funding APR', `<span class="${fundCls(r.fundingApr)}">${pct(r.fundingApr,1)}</span>`],
+        ['Open Interest', usd(r.oiUsd)],
+        ['24h Volume', usd(r.volUsd)],
+        ['Premium', pct(r.premium,3)],
+        ['Next funding', `<span class="countdown" id="cd">—</span>`],
+      ].map(([l,v]) => `<div class="ds"><span>${l}</span><strong>${v}</strong></div>`).join('');
+      startCountdown(r);
+      try {
+        const d = await (await fetch(`/api/perp/funding?coin=${coin}&days=14`)).json();
+        drawFunding(d.history || []);
+      } catch { drawFunding([]); }
+    }
+
+    function drawFunding(hist) {
+      const el = $('fundChart');
+      if (chart) { chart.remove(); chart = null; }
+      chart = LightweightCharts.createChart(el, {
+        layout: { background: { color: 'transparent' }, textColor: '#6a6a86' },
+        grid: { vertLines: { color: 'transparent' }, horzLines: { color: '#1a1a2e' } },
+        rightPriceScale: { borderColor: '#1a1a2e' }, timeScale: { borderColor: '#1a1a2e' },
+        height: el.clientHeight, width: el.clientWidth,
+      });
+      series = chart.addAreaSeries({ lineColor:'#3b5ff5', topColor:'rgba(59,95,245,.3)', bottomColor:'rgba(59,95,245,0)', lineWidth:2, priceFormat:{type:'custom',formatter:v=>v.toFixed(0)+'%'} });
+      series.setData(hist.map(h => ({ time: h.time, value: h.apr })));
+      series.createPriceLine({ price: 0, color: '#6a6a86', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+      chart.timeScale().fitContent();
+    }
+
+    function startCountdown(r) {
+      clearInterval(cdTimer);
+      const tick = () => {
+        const el = $('cd'); if (!el) return;
+        let ms = r.nextFunding ? r.nextFunding - Date.now() : (3600 - (Math.floor(Date.now()/1000)%3600))*1000;
+        if (ms < 0) ms = 0;
+        const m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000);
+        el.textContent = `${m}m ${String(s).padStart(2,'0')}s`;
+      };
+      tick(); cdTimer = setInterval(tick, 1000);
+    }
+
+    // ── wiring ────────────────────────────────────────────────────────────
+    document.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+      const k = th.dataset.k;
+      if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = (k==='coin')?1:-1; }
+      renderTable();
+    }));
+    $('search').addEventListener('input', renderTable);
+    $('minOi').addEventListener('change', renderTable);
+    new ResizeObserver(() => { if (chart) chart.applyOptions({ width: $('fundChart').clientWidth, height: $('fundChart').clientHeight }); }).observe(document.body);
+
+    load();
+    setInterval(load, 30000);   // refresh funding/OI every 30s
+  </script>
+</body>
+</html>

@@ -194,6 +194,19 @@ A full backtesting engine that runs on the server via [backtesting.py](https://g
 
 ---
 
+## Perp Radar (Hyperliquid funding & OI — v2)
+
+A live analytics board for Hyperliquid perpetuals at `/perp` (or **PERP RADAR ↗** in the topbar), tapping the same free API the charts already use — for the perp signal the dashboard wasn't surfacing:
+
+- **Funding rates** (hourly + annualised APR) for all ~230 perps, with a next-funding countdown.
+- **Open interest** (USD) and 24h volume — sortable, searchable, filterable by OI.
+- **Cross-venue spread**: HL funding APR − Binance funding APR (from `predictedFundings`) — the carry between venues.
+- **Funding extremes**: crowded-longs / shorts-paying leaderboards (a squeeze radar).
+- **Per-coin funding-history** chart (14d) + premium, with a zero-funding baseline.
+- Auto-refreshes every 30s. Module: `perp_data.py`; endpoints `GET /api/perp/contexts`, `GET /api/perp/funding`. **No new dependencies** — pure Hyperliquid REST.
+
+---
+
 ## Themes
 
 A **THEME** dropdown in the topbar toggles between **Dark** (default) and **Light** instantly.

@@ -250,6 +250,39 @@ def api_report():
                 400, {"Content-Type": "text/html; charset=utf-8"})
 
 
+# ── v2: Hyperliquid perp analytics (funding / OI / premium) ──────────────────
+
+@app.route("/perp")
+def perp_page():
+    return render_template("perp.html")
+
+
+@app.route("/api/perp/contexts")
+def api_perp_contexts():
+    import perp_data
+    try:
+        rows = perp_data.fetch_perp_table()
+        return jsonify({
+            "ok": True,
+            "time": int(time.time() * 1000),
+            "summary": perp_data.market_summary(rows),
+            "rows": rows,
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+
+
+@app.route("/api/perp/funding")
+def api_perp_funding():
+    import perp_data
+    coin = request.args.get("coin", "BTC").strip().upper()
+    days = max(1, min(60, int(request.args.get("days", 14))))
+    try:
+        return jsonify({"ok": True, "coin": coin, "history": perp_data.fetch_funding_history(coin, days)})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+
+
 # ── Telegram alert proxy ─────────────────────────────────────────────────────
 
 def _send_telegram(text: str) -> tuple[bool, str]:
