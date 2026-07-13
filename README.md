@@ -2,7 +2,7 @@
 
 A self-hosted, browser-based trading dashboard that shows up to 8 live candlestick charts side-by-side across three asset classes — Indian equities, US equities, and crypto perpetuals on Hyperliquid — with a full suite of technical indicators, Telegram alerts, a watchlist, drawing tools, and a backtest engine.
 
-Runs locally on Python + Flask, with all charting, indicator math, alert detection, and backtest simulation done client-side in the browser.
+Runs locally on Python + Flask. The core dashboard does its charting, indicator math, and alert detection **client-side in the browser**; **v2** adds a **server-side analytics suite** — a pro backtester, Hyperliquid perp analytics, a portfolio tracker, an earnings calendar, a price-forecast cone, an NSE option chain, and news sentiment (see the [v2 Feature Suite](#v2--server-side-analytics-suite) below).
 
 ---
 
@@ -26,6 +26,27 @@ Runs locally on Python + Flask, with all charting, indicator math, alert detecti
 - **Full-screen mode** — double-click any pane to maximize.
 - **Per-pane persistence** — source, symbol, interval, indicators, colors, drawings, comparison, theme, watchlist, alerts all survive reloads.
 - **Mobile responsive** — usable on tablets and phones; phone view stacks panes vertically.
+
+---
+
+## v2 — Server-side analytics suite
+
+Beyond the browser dashboard, **v2** adds a set of **server-side** tools (Python/Flask), each on its own page and linked from the topbar (`BACKTEST LAB · PERP RADAR · PORTFOLIO · CALENDAR · FORECAST · OPTIONS`). Heavy libraries are **lazy-imported inside the request handlers**, so the dashboard itself still boots fast and is unaffected if an optional lib is missing.
+
+| Tool | Route | What it adds | Details |
+|---|---|---|---|
+| **Backtest Lab** | `/backtest` | Multi-strategy backtester (`backtesting.py`) — EMA/SMA/RSI/MACD, fees + slippage, Sharpe/Sortino, equity curve, parameter optimizer, and a one-click **QuantStats tearsheet**. Plus **🔔 Arm live alerts** to fire Telegram on fresh live signals. | [↓](#backtest-lab-server-side--v2) |
+| **Perp Radar** | `/perp` | Hyperliquid funding / OI / premium for all ~230 perps, **cross-venue funding spread** (HL vs Binance), funding-history chart, and a **live order book + trade tape** (WebSocket). | [↓](#perp-radar-hyperliquid-funding--oi--v2) |
+| **Portfolio Lab** | `/portfolio` | Holdings P&L + allocation, **correlation heatmap**, and a **max-Sharpe rebalance** (PyPortfolioOpt). | [↓](#portfolio-earnings--sentiment-v2-backlog) |
+| **Earnings Calendar** | `/calendar` | Upcoming earnings dates + last surprise (yfinance, no key). | [↓](#portfolio-earnings--sentiment-v2-backlog) |
+| **Forecast Cone** | `/forecast` | GBM probabilistic price projection — median path + 68% / 95% confidence bands. | [↓](#portfolio-earnings--sentiment-v2-backlog) |
+| **NSE Option Chain** | `/options` | NIFTY/BANKNIFTY & equity chains — OI, IV, PCR, max-pain. ⚠️ needs an Indian IP. | [↓](#portfolio-earnings--sentiment-v2-backlog) |
+| **News sentiment** | News modal | VADER score per headline + overall tone, using a **finance-tuned lexicon**. | [↓](#portfolio-earnings--sentiment-v2-backlog) |
+
+**New Python modules** (all lazy-imported): `market_data.py`, `backtest_engine.py`, `reports.py`, `perp_data.py`, `portfolio.py`, `earnings.py`, `sentiment.py`, `forecast.py`, `nse_data.py`.
+**Added dependencies** (see [`requirements.txt`](requirements.txt)): `backtesting`, `quantstats`, `PyPortfolioOpt`, `vaderSentiment`, `lxml`. Installing them does **not** change the pinned `pandas`/`numpy`, so the core app's runtime is unaffected.
+
+> ⚠️ **After editing any `.py` file, restart the server** — it runs with `use_reloader=False`, so Python route code is *not* hot-reloaded (templates are). New routes won't appear until you restart `python app.py`.
 
 ---
 
