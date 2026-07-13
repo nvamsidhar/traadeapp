@@ -3042,6 +3042,13 @@ function alertConditionLabel(a) {
     case 'macd_bear':         return 'MACD bearish cross';
     case 'price_above_sma50': return 'Price crosses above SMA 50';
     case 'price_below_sma50': return 'Price crosses below SMA 50';
+    case 'strategy': {
+      const p = a.params || {}, s = (a.strategy || '').toUpperCase();
+      const detail = s === 'RSI'  ? `${p.period || 14} · ${p.lower || 30}/${p.upper || 70}`
+                   : s === 'MACD' ? `${p.fast || 12}/${p.slow || 26}/${p.signal || 9}`
+                   :                `${p.fast ?? ''}/${p.slow ?? ''}`;
+      return `🎯 ${s} strategy signal (${detail})`;
+    }
     default:                  return a.type;
   }
 }

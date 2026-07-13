@@ -234,6 +234,8 @@
             <span class="badge">params: ${Object.entries(d.params).map(([k, v]) => k + '=' + v).join(', ')}</span>
             ${d.optimized ? '<span class="badge" style="color:#6366f1">optimized</span>' : ''}
             <span class="badge">fees ${d.commissionPct}%/side</span>
+            <button class="ghost" id="armBtn" style="margin-left:auto"
+              title="Create a 24/7 server alert that pings your Telegram when this strategy fires a fresh Buy/Sell signal on live candles">🔔 Arm live alerts</button>
           </div>
           <div class="stats">
             ${statBox('Total Return', pct(m['Return [%]']), cls(m['Return [%]']))}
@@ -290,6 +292,7 @@
           </div>
         </div>`;
       drawEquity(d.equity);
+      $('armBtn').addEventListener('click', armAlert);
       $('tearBtn').addEventListener('click', () => {
         const q = new URLSearchParams({
           source: lastReq.source, symbol: lastReq.symbol, interval: lastReq.interval,
@@ -298,6 +301,30 @@
         });
         window.open('/api/report?' + q.toString(), '_blank');
       });
+    }
+
+    async function armAlert() {
+      const btn = $('armBtn');
+      if (!btn || !lastReq) return;
+      const sym = lastReq.symbol.trim().toUpperCase();
+      const resolved = (lastReq.source === 'india' && !sym.endsWith('.NS')) ? sym + '.NS' : sym;
+      btn.disabled = true; btn.textContent = 'Arming…';
+      try {
+        const res = await fetch('/api/alerts', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: lastReq.source, rawSymbol: sym, resolvedSymbol: resolved,
+            type: 'strategy', strategy: lastReq.strategy, params: lastReq.params,
+            interval: lastReq.interval, repeating: true, cooldownMs: 0,
+          }),
+        });
+        const d = await res.json();
+        if (!d.ok) throw new Error(d.error || 'failed');
+        btn.textContent = '✓ Armed — Telegram on new signals';
+        btn.style.borderColor = 'var(--up)'; btn.style.color = 'var(--up)';
+      } catch (e) {
+        btn.disabled = false; btn.textContent = '⚠ Failed — retry';
+      }
     }
   </script>
 </body>

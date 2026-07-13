@@ -240,6 +240,75 @@ def _condition_label(alert: dict[str, Any]) -> str:
     return t
 
 
+# ── Strategy-signal alerts (Backtest Lab → Telegram bridge) ───────────────────
+
+def _strategy_signal(candles: list[dict], strategy: str | None,
+                     params: dict | None) -> tuple[str | None, int | None]:
+    """Detect a *fresh* Buy/Sell signal on the latest bar for a backtest strategy.
+
+    Mirrors backtest_engine's EMA/SMA/RSI/MACD crossovers so a strategy validated
+    in the Backtest Lab fires the same signal live. Returns (direction, bar_time)
+    where direction is "BUY" | "SELL" | None.
+    """
+    closes = [c["close"] for c in candles]
+    if len(closes) < 3:
+        return None, None
+    p = params or {}
+
+    def gi(key: str, default: int) -> int:
+        try:
+            return int(p.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    strat = (strategy or "ema").lower()
+    direction: str | None = None
+
+    if strat in ("ema", "sma"):
+        fast_p = gi("fast", 12 if strat == "ema" else 20)
+        slow_p = gi("slow", 26 if strat == "ema" else 50)
+        fa, sa = (_ema(closes, fast_p), _ema(closes, slow_p)) if strat == "ema" \
+            else (_sma(candles, fast_p), _sma(candles, slow_p))
+        if None in (fa[-2], fa[-1], sa[-2], sa[-1]):
+            return None, None
+        if fa[-2] <= sa[-2] and fa[-1] > sa[-1]:
+            direction = "BUY"
+        elif fa[-2] >= sa[-2] and fa[-1] < sa[-1]:
+            direction = "SELL"
+
+    elif strat == "rsi":
+        r = _rsi(candles, gi("period", 14))
+        if r[-1] is None or r[-2] is None:
+            return None, None
+        if _crossed(r[-2], r[-1], gi("lower", 30), "below"):
+            direction = "BUY"
+        elif _crossed(r[-2], r[-1], gi("upper", 70), "above"):
+            direction = "SELL"
+
+    elif strat == "macd":
+        line, sig = _macd(candles, gi("fast", 12), gi("slow", 26), gi("signal", 9))
+        if None in (line[-2], line[-1], sig[-2], sig[-1]):
+            return None, None
+        if line[-2] <= sig[-2] and line[-1] > sig[-1]:
+            direction = "BUY"
+        elif line[-2] >= sig[-2] and line[-1] < sig[-1]:
+            direction = "SELL"
+
+    return direction, (int(candles[-1]["time"]) if direction else None)
+
+
+def _strategy_label(alert: dict[str, Any]) -> str:
+    s = (alert.get("strategy") or "ema").lower()
+    p = alert.get("params") or {}
+    if s in ("ema", "sma"):
+        return f"{s.upper()} cross ({p.get('fast', '?')}/{p.get('slow', '?')})"
+    if s == "rsi":
+        return f"RSI({p.get('period', 14)}) {p.get('lower', 30)}/{p.get('upper', 70)}"
+    if s == "macd":
+        return f"MACD ({p.get('fast', 12)}/{p.get('slow', 26)}/{p.get('signal', 9)})"
+    return s
+
+
 # ── Worker loop ───────────────────────────────────────────────────────────────
 
 def _send_telegram(text: str) -> bool:
@@ -259,7 +328,9 @@ def _evaluate_all_once() -> None:
         if not alert.get("enabled"):
             continue
         fired_at = alert.get("firedAt")
-        if fired_at:
+        # Strategy-signal alerts self-dedupe by signal-bar time, so they bypass
+        # the firedAt/cooldown gate (they should keep watching for new crosses).
+        if fired_at and alert.get("type") != "strategy":
             if not alert.get("repeating"):
                 continue
             if now_ms - int(fired_at) < int(alert.get("cooldownMs") or 5 * 60 * 1000):
@@ -272,6 +343,27 @@ def _evaluate_all_once() -> None:
         interval = alert.get("interval") or ("1h" if source == "crypto" else "1d")
         candles = _fetch_candles(source, resolved, interval)
         if not candles:
+            continue
+
+        # Strategy-signal alerts (Backtest Lab → Telegram): fire once per fresh
+        # Buy/Sell cross, deduped by the signal bar's timestamp.
+        if alert.get("type") == "strategy":
+            try:
+                direction, sig_ts = _strategy_signal(candles, alert.get("strategy"), alert.get("params"))
+            except Exception as exc:
+                update_alert(alert["id"], {"lastError": str(exc)})
+                continue
+            if direction and sig_ts and sig_ts != alert.get("lastSignalTs"):
+                cur_px = float(candles[-1]["close"])
+                update_alert(alert["id"], {"lastSignalTs": sig_ts, "firedAt": now_ms, "lastError": None})
+                emoji = "🟢" if direction == "BUY" else "🔴"
+                msg = (
+                    f"{emoji} <b>{alert.get('rawSymbol')}</b> ({source}) — <b>{direction}</b>\n"
+                    f"{_strategy_label(alert)} · {interval}\n"
+                    f"Price: <b>{cur_px:.6f}</b>"
+                )
+                if not _send_telegram(msg):
+                    update_alert(alert["id"], {"lastError": "telegram send failed"})
             continue
 
         try:

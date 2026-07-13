@@ -83,6 +83,9 @@ def add_alert(spec: dict[str, Any]) -> dict[str, Any]:
             "type":          spec.get("type"),
             "value":         spec.get("value"),
             "period":        spec.get("period"),
+            # strategy-signal alerts (Backtest Lab → Telegram bridge)
+            "strategy":      spec.get("strategy"),
+            "params":        spec.get("params"),
             "interval":      spec.get("interval") or _default_interval(spec.get("source", "us")),
             "enabled":       True,
             "repeating":     bool(spec.get("repeating", False)),

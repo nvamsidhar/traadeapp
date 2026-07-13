@@ -189,6 +189,7 @@ A full backtesting engine that runs on the server via [backtesting.py](https://g
   - **Equity curve** (lightweight-charts) + full trade list.
   - **QuantStats tearsheet**: a one-click full HTML performance report (drawdown analysis, monthly-returns heatmap, rolling Sharpe…) via [quantstats](https://github.com/ranaroussi/quantstats).
 - **Architecture**: the heavy libs are lazy-imported inside the Flask handlers, so the dashboard still boots fast. New modules: `market_data.py`, `backtest_engine.py`, `reports.py`. Endpoints: `POST /api/backtest`, `GET /api/report`.
+- **🔔 Arm for live alerts**: one click on a backtest result creates a 24/7 server alert (via the existing alert worker) that pings **Telegram** on a fresh Buy/Sell cross on live candles. New alert `type: "strategy"`; the worker's signal detection mirrors the backtest strategies and self-dedupes by signal-bar time.
 
 > QuantStats annualises from **daily** returns, so a `1d` interval gives the most accurate risk metrics. Still not trading advice — compare strategy *behaviour*, don't size real positions off it.
 
