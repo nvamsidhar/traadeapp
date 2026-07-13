@@ -72,6 +72,24 @@
     .ds strong{font-size:15px}
     .countdown{font-variant-numeric:tabular-nums}
     .msg{padding:16px;color:var(--muted)}.msg.err{color:var(--down)}
+
+    /* live order book + trade tape */
+    .live-sec{margin-top:16px}
+    .live-head{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);
+      margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+    .obook{font-size:12px;font-variant-numeric:tabular-nums}
+    .ob-row{position:relative;display:flex;justify-content:space-between;padding:2px 7px;z-index:1}
+    .ob-row .bar{position:absolute;top:0;bottom:0;right:0;z-index:-1;opacity:.15}
+    .ob-row.ask .bar{background:var(--down)} .ob-row.bid .bar{background:var(--up)}
+    .ob-row.ask .px{color:#fb7185} .ob-row.bid .px{color:#34d399}
+    .ob-spread{text-align:center;color:var(--muted);font-size:11px;padding:4px 0;
+      border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:3px 0}
+    .tape{max-height:210px;overflow:auto;font-size:12px;font-variant-numeric:tabular-nums}
+    .tape-row{display:flex;justify-content:space-between;gap:8px;padding:2px 7px}
+    .tape-row .tpx{flex:0 0 auto}
+    .tape-row.buy .tpx{color:#34d399} .tape-row.sell .tpx{color:#fb7185}
+    .tape-row.big{font-weight:700;background:rgba(255,255,255,.05)}
+    .tape-row span:first-child{color:var(--muted)}
   </style>
 </head>
 <body>
@@ -133,6 +151,15 @@
         <h2 id="detailTitle">Select a coin</h2>
         <div id="fundChart"></div>
         <div class="detail-stats" id="detailStats"></div>
+
+        <div class="live-sec">
+          <div class="live-head"><span>Order book <span style="color:var(--muted)">(live)</span></span><span id="imbalance"></span></div>
+          <div id="obook" class="obook"><div class="msg">connecting…</div></div>
+        </div>
+        <div class="live-sec">
+          <div class="live-head"><span>Live trades <span style="color:var(--muted)">(large prints bold)</span></span><span id="cvd"></span></div>
+          <div id="tape" class="tape"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -220,6 +247,7 @@
     async function selectCoin(coin) {
       selected = coin;
       renderTable();
+      subscribeCoin(coin);
       const r = ROWS.find(x => x.coin === coin);
       $('detailTitle').innerHTML = `${coin} <small style="color:var(--muted)">· ${price(r.mark)}</small>`;
       $('detailStats').innerHTML = [
@@ -274,7 +302,69 @@
     $('minOi').addEventListener('change', renderTable);
     new ResizeObserver(() => { if (chart) chart.applyOptions({ width: $('fundChart').clientWidth, height: $('fundChart').clientHeight }); }).observe(document.body);
 
+    // ── live order book + trade tape (direct Hyperliquid WebSocket) ───────
+    const HL_WS = 'wss://api.hyperliquid.xyz/ws';
+    let ws, wsCoin = null, cvd = 0, tape = [];
+
+    function connectWS() {
+      ws = new WebSocket(HL_WS);
+      ws.onopen = () => { if (selected) { wsCoin = null; subscribeCoin(selected); } };
+      ws.onmessage = ev => {
+        const m = JSON.parse(ev.data);
+        if (m.channel === 'l2Book' && m.data.coin === wsCoin) renderBook(m.data);
+        else if (m.channel === 'trades' && m.data[0]?.coin === wsCoin) renderTrades(m.data);
+      };
+      ws.onclose = () => setTimeout(connectWS, 2500);
+      ws.onerror = () => { try { ws.close(); } catch {} };
+    }
+    function _sub(type, coin, on) {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify(
+        { method: on ? 'subscribe' : 'unsubscribe', subscription: { type, coin } }));
+    }
+    function subscribeCoin(coin) {
+      if (!ws || ws.readyState !== 1 || wsCoin === coin) return;
+      if (wsCoin) { _sub('l2Book', wsCoin, false); _sub('trades', wsCoin, false); }
+      wsCoin = coin; cvd = 0; tape = [];
+      $('tape').innerHTML = ''; $('obook').innerHTML = '<div class="msg">connecting…</div>';
+      _sub('l2Book', coin, true); _sub('trades', coin, true);
+    }
+
+    function renderBook(d) {
+      const bids = d.levels[0].slice(0, 11), asks = d.levels[1].slice(0, 11);
+      if (!bids.length || !asks.length) return;
+      const maxSz = Math.max(...bids.map(l => +l.sz), ...asks.map(l => +l.sz), 1e-9);
+      const bidSum = bids.reduce((s, l) => s + +l.sz, 0), askSum = asks.reduce((s, l) => s + +l.sz, 0);
+      const imb = (bidSum + askSum) ? (bidSum - askSum) / (bidSum + askSum) * 100 : 0;
+      const row = (l, side) => `<div class="ob-row ${side}"><span class="bar" style="width:${(+l.sz/maxSz*100).toFixed(1)}%"></span><span class="px">${price(+l.px)}</span><span>${(+l.sz).toLocaleString('en-US',{maximumFractionDigits:4})}</span></div>`;
+      const spread = +asks[0].px - +bids[0].px;
+      $('obook').innerHTML =
+        asks.slice().reverse().map(l => row(l, 'ask')).join('') +
+        `<div class="ob-spread">spread ${price(spread)} · mid ${price((+asks[0].px + +bids[0].px)/2)}</div>` +
+        bids.map(l => row(l, 'bid')).join('');
+      $('imbalance').innerHTML = `imbalance <b class="${imb>=0?'up':'down'}">${imb>=0?'+':''}${imb.toFixed(0)}%</b>`;
+    }
+
+    function renderTrades(arr) {
+      for (const t of arr) {
+        const px = +t.px, sz = +t.sz, notional = px * sz, buy = t.side === 'B';
+        cvd += buy ? notional : -notional;
+        tape.unshift({ time: t.time, px, sz, notional, buy });
+      }
+      tape = tape.slice(0, 40);
+      const sorted = tape.map(t => t.notional).sort((a, b) => a - b);
+      const big = sorted.length ? sorted[Math.floor(sorted.length * 0.9)] : Infinity;
+      $('tape').innerHTML = tape.map(t => `
+        <div class="tape-row ${t.buy?'buy':'sell'} ${t.notional>=big && t.notional>5000 ?'big':''}">
+          <span>${new Date(t.time).toLocaleTimeString()}</span>
+          <span class="tpx">${price(t.px)}</span>
+          <span>${t.sz.toLocaleString('en-US',{maximumFractionDigits:4})}</span>
+          <span>${usd(t.notional)}</span>
+        </div>`).join('');
+      $('cvd').innerHTML = `CVD <b class="${cvd>=0?'up':'down'}">${cvd>=0?'+':'−'}${usd(Math.abs(cvd))}</b>`;
+    }
+
     load();
+    connectWS();
     setInterval(load, 30000);   // refresh funding/OI every 30s
   </script>
 </body>
