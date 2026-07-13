@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backtest Lab — Trading Dashboard</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root{
+      --bg:#0c0c14; --panel:#111120; --panel2:#0f0f1a; --border:#1a1a2e;
+      --text:#c7c7d9; --muted:#6a6a86; --accent:#3b5ff5; --accent2:#6366f1;
+      --up:#22c55e; --down:#ef4444; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+    a{color:var(--accent);text-decoration:none}
+    .topbar{display:flex;align-items:center;gap:16px;padding:12px 20px;
+      border-bottom:1px solid var(--border);background:var(--panel2);position:sticky;top:0;z-index:10}
+    .logo{font-weight:600;letter-spacing:.3px}
+    .logo .accent{color:var(--accent)}
+    .topbar .spacer{flex:1}
+    .back-link{font-size:13px;color:var(--muted)}
+    .back-link:hover{color:var(--text)}
+    .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+    h1{font-size:20px;margin:4px 0 2px}
+    .sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px}
+    form.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;align-items:end}
+    .field{display:flex;flex-direction:column;gap:5px}
+    .field label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+    input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+      border-radius:7px;padding:9px 10px;font-size:13px;width:100%}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    .params{display:flex;gap:10px;flex-wrap:wrap;grid-column:1/-1}
+    .params .field{min-width:120px}
+    .row-actions{grid-column:1/-1;display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:4px}
+    .check{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;cursor:pointer}
+    .check input{width:auto}
+    button.run{background:var(--accent);color:#fff;border:none;border-radius:7px;
+      padding:11px 26px;font-size:14px;font-weight:600;cursor:pointer;margin-left:auto}
+    button.run:hover{background:#2f4fe0}
+    button.run:disabled{opacity:.55;cursor:not-allowed}
+    button.ghost{background:transparent;border:1px solid var(--border);color:var(--text);
+      border-radius:7px;padding:10px 16px;font-size:13px;cursor:pointer}
+    button.ghost:hover{border-color:var(--accent)}
+
+    #results{margin-top:22px;display:none}
+    .result-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+    .result-head h2{margin:0;font-size:17px}
+    .badge{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:3px 10px}
+    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px}
+    .stat{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:11px 13px}
+    .stat span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+    .stat strong{font-size:17px;font-weight:600}
+    .up{color:var(--up)} .down{color:var(--down)} .warn{color:var(--warn)}
+    .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+      margin:22px 0 10px;border-top:1px solid var(--border);padding-top:16px}
+    #equityChart{height:320px;width:100%;border:1px solid var(--border);border-radius:8px;background:var(--panel2)}
+    .qs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+    table.trades{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+    table.trades th,table.trades td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--border)}
+    table.trades th{color:var(--muted);font-weight:500;text-transform:uppercase;font-size:10.5px;letter-spacing:.4px}
+    table.trades td:first-child,table.trades th:first-child{text-align:left}
+    .trades-wrap{max-height:340px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+    .msg{padding:16px;color:var(--muted)}
+    .msg.err{color:var(--down)}
+    .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);
+      border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+    @keyframes sp{to{transform:rotate(360deg)}}
+    .disclaimer{margin-top:20px;font-size:12px;color:var(--muted);line-height:1.55;
+      background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">Backtest <span class="accent">Lab</span></span>
+    <span class="spacer"></span>
+    <a class="back-link" href="/">← Back to dashboard</a>
+  </header>
+
+  <div class="wrap">
+    <h1>Strategy Backtester</h1>
+    <p class="sub">Server-side engine (backtesting.py) with realistic fees &amp; slippage, full risk metrics, an equity curve, and a QuantStats tearsheet. Works on US &amp; India equities and Hyperliquid crypto.</p>
+
+    <div class="card">
+      <form class="controls" id="btForm" autocomplete="off">
+        <div class="field">
+          <label>Source</label>
+          <select id="source">
+            <option value="crypto">Hyperliquid (Crypto)</option>
+            <option value="us">US Stocks</option>
+            <option value="india">India (NSE)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Symbol</label>
+          <input id="symbol" list="symList" value="BTC" placeholder="e.g. BTC, AAPL, RELIANCE" />
+          <datalist id="symList"></datalist>
+        </div>
+        <div class="field">
+          <label>Interval</label>
+          <select id="interval"></select>
+        </div>
+        <div class="field">
+          <label>Strategy</label>
+          <select id="strategy"></select>
+        </div>
+        <div class="params" id="params"></div>
+        <div class="field">
+          <label>Initial capital</label>
+          <input id="capital" type="number" value="10000" step="100" min="1" />
+        </div>
+        <div class="field">
+          <label>Fees + slippage (%)</label>
+          <input id="commission" type="number" value="0.2" step="0.05" min="0" max="10"
+                 title="Charged per trade on entry and exit. Stocks ≈ 0.05–0.2%, crypto ≈ 0.1–0.5%." />
+        </div>
+        <div class="row-actions">
+          <label class="check" title="Grid-search the strategy's parameters to maximise Sharpe ratio">
+            <input type="checkbox" id="optimize" /> Optimize parameters (maximize Sharpe)
+          </label>
+          <button class="run" id="runBtn" type="submit">Run backtest</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const STRATEGIES = {{ strategies | tojson }};
+    const SYMS = { crypto: {{ crypto_symbols | tojson }}, us: {{ us_stocks | tojson }}, india: {{ indian_stocks | tojson }} };
+    const TIMEFRAMES = {{ timeframes | tojson }};
+
+    const $ = id => document.getElementById(id);
+
+    // ── populate selects ──────────────────────────────────────────────────
+    TIMEFRAMES.forEach(t => $('interval').add(new Option(t, t)));
+    $('interval').value = '1d';
+    STRATEGIES.forEach(s => $('strategy').add(new Option(s.label, s.key)));
+
+    function renderParams() {
+      const strat = STRATEGIES.find(s => s.key === $('strategy').value);
+      $('params').innerHTML = (strat?.params || []).map(p => `
+        <div class="field">
+          <label>${p.label}</label>
+          <input type="number" data-param="${p.key}" value="${p.default}" min="${p.min}" max="${p.max}" step="1"/>
+        </div>`).join('');
+    }
+    function renderSymbols() {
+      const list = SYMS[$('source').value] || [];
+      $('symList').innerHTML = list.map(s => `<option value="${s.replace('.NS','')}">`).join('');
+    }
+    $('strategy').addEventListener('change', renderParams);
+    $('source').addEventListener('change', renderSymbols);
+    renderParams(); renderSymbols();
+
+    // ── formatting helpers ────────────────────────────────────────────────
+    const num = (n, d = 2) => (n == null || isNaN(n)) ? '—'
+      : Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const pct = n => (n == null || isNaN(n)) ? '—' : (n >= 0 ? '+' : '') + num(n) + '%';
+    const money = n => (n == null || isNaN(n)) ? '—' : '$' + num(n);
+    const cls = n => (n == null || isNaN(n)) ? '' : (n >= 0 ? 'up' : 'down');
+
+    function statBox(label, value, klass = '') {
+      return `<div class="stat"><span>${label}</span><strong class="${klass}">${value}</strong></div>`;
+    }
+
+    let chart, series;
+    function drawEquity(points) {
+      const el = $('equityChart');
+      if (!el) return;
+      if (chart) { chart.remove(); chart = null; }
+      chart = LightweightCharts.createChart(el, {
+        layout: { background: { color: 'transparent' }, textColor: '#6a6a86' },
+        grid: { vertLines: { color: '#15152400' }, horzLines: { color: '#1a1a2e' } },
+        rightPriceScale: { borderColor: '#1a1a2e' },
+        timeScale: { borderColor: '#1a1a2e', timeVisible: false },
+        crosshair: { horzLine: { labelBackgroundColor: '#3b5ff5' }, vertLine: { labelBackgroundColor: '#3b5ff5' } },
+        height: el.clientHeight, width: el.clientWidth,
+      });
+      series = chart.addAreaSeries({
+        lineColor: '#3b5ff5', topColor: 'rgba(59,95,245,.35)', bottomColor: 'rgba(59,95,245,0)', lineWidth: 2,
+      });
+      series.setData(points);
+      chart.timeScale().fitContent();
+    }
+    new ResizeObserver(() => {
+      const el = $('equityChart');
+      if (chart && el) chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+    }).observe(document.body);
+
+    // ── run ───────────────────────────────────────────────────────────────
+    let lastReq = null;
+    $('btForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const params = {};
+      document.querySelectorAll('[data-param]').forEach(i => params[i.dataset.param] = Number(i.value));
+      const req = {
+        source: $('source').value, symbol: $('symbol').value.trim(),
+        interval: $('interval').value, strategy: $('strategy').value,
+        capital: Number($('capital').value), commission: Number($('commission').value),
+        optimize: $('optimize').checked, params,
+      };
+      lastReq = req;
+      const R = $('results');
+      R.style.display = 'block';
+      R.innerHTML = `<div class="card"><div class="msg"><span class="spin"></span>Running backtest on ${req.symbol}…${req.optimize ? ' (optimizing — this can take a moment)' : ''}</div></div>`;
+      $('runBtn').disabled = true;
+      try {
+        const res = await fetch('/api/backtest', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'backtest failed');
+        renderResults(data);
+      } catch (err) {
+        R.innerHTML = `<div class="card"><div class="msg err">⚠ ${err.message}</div></div>`;
+      } finally {
+        $('runBtn').disabled = false;
+      }
+    });
+
+    function renderResults(d) {
+      const m = d.metrics, qs = d.quantstats || {};
+      const R = $('results');
+      R.innerHTML = `
+        <div class="card">
+          <div class="result-head">
+            <h2>${d.symbol} · ${d.strategy}</h2>
+            <span class="badge">${d.interval}</span>
+            <span class="badge">params: ${Object.entries(d.params).map(([k, v]) => k + '=' + v).join(', ')}</span>
+            ${d.optimized ? '<span class="badge" style="color:#6366f1">optimized</span>' : ''}
+            <span class="badge">fees ${d.commissionPct}%/side</span>
+          </div>
+          <div class="stats">
+            ${statBox('Total Return', pct(m['Return [%]']), cls(m['Return [%]']))}
+            ${statBox('Buy &amp; Hold', pct(m['Buy & Hold Return [%]']), cls(m['Buy & Hold Return [%]']))}
+            ${statBox('Final Equity', money(d.finalEquity))}
+            ${statBox('CAGR', pct(m['CAGR [%]']), cls(m['CAGR [%]']))}
+            ${statBox('Sharpe', num(m['Sharpe Ratio']), (m['Sharpe Ratio'] >= 1 ? 'up' : ''))}
+            ${statBox('Sortino', num(m['Sortino Ratio']))}
+            ${statBox('Max Drawdown', pct(m['Max. Drawdown [%]']), 'down')}
+            ${statBox('Win Rate', num(m['Win Rate [%]'], 1) + '%')}
+            ${statBox('Trades', m['# Trades'] ?? '—')}
+            ${statBox('Profit Factor', num(m['Profit Factor']))}
+            ${statBox('Exposure', num(m['Exposure Time [%]'], 1) + '%')}
+            ${statBox('Best / Worst', pct(m['Best Trade [%]']) + ' / ' + pct(m['Worst Trade [%]']))}
+          </div>
+
+          <div class="section-title">Equity curve</div>
+          <div id="equityChart"></div>
+
+          <div class="section-title">QuantStats — return-based metrics
+            <button class="ghost" id="tearBtn" style="float:right;margin-top:-6px">Open full tearsheet ↗</button>
+          </div>
+          <div class="qs-grid">
+            ${statBox('CAGR', pct(qs['CAGR [%]']), cls(qs['CAGR [%]']))}
+            ${statBox('Sharpe', num(qs['Sharpe']))}
+            ${statBox('Sortino', num(qs['Sortino']))}
+            ${statBox('Volatility', num(qs['Volatility [%]'], 1) + '%')}
+            ${statBox('Max DD', pct(qs['Max Drawdown [%]']), 'down')}
+            ${statBox('Calmar', num(qs['Calmar']))}
+            ${statBox('Win Rate', num(qs['Win Rate [%]'], 1) + '%')}
+          </div>
+
+          <div class="section-title">Trades (${d.trades.length})</div>
+          <div class="trades-wrap">
+            <table class="trades">
+              <thead><tr><th>Entry</th><th>Exit</th><th>Entry $</th><th>Exit $</th><th>P&amp;L</th><th>Return</th></tr></thead>
+              <tbody>${d.trades.slice().reverse().map(t => `
+                <tr>
+                  <td>${new Date(t.entryTime * 1000).toLocaleDateString()}</td>
+                  <td>${new Date(t.exitTime * 1000).toLocaleDateString()}</td>
+                  <td>${num(t.entryPrice, 2)}</td>
+                  <td>${num(t.exitPrice, 2)}</td>
+                  <td class="${cls(t.pnl)}">${money(t.pnl)}</td>
+                  <td class="${cls(t.pnlPct)}">${pct(t.pnlPct)}</td>
+                </tr>`).join('') || '<tr><td colspan="6" class="msg">No trades generated for these settings.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="disclaimer">
+            <strong>Reality check:</strong> long-only, one position at a time, fills at candle close.
+            Past performance says nothing about the future — use this to compare strategy <em>behaviour</em>,
+            not to size real trades. QuantStats metrics annualize from daily returns, so a <strong>1d interval</strong> gives the most accurate risk figures.
+          </div>
+        </div>`;
+      drawEquity(d.equity);
+      $('tearBtn').addEventListener('click', () => {
+        const q = new URLSearchParams({
+          source: lastReq.source, symbol: lastReq.symbol, interval: lastReq.interval,
+          strategy: lastReq.strategy, capital: lastReq.capital, commission: lastReq.commission,
+          optimize: lastReq.optimize ? '1' : '0', params: JSON.stringify(lastReq.params),
+        });
+        window.open('/api/report?' + q.toString(), '_blank');
+      });
+    }
+  </script>
+</body>
+</html>

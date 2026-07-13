@@ -172,7 +172,25 @@ Replays a strategy's signals through the loaded candles, simulating trades and r
   - **Stats panel**: Total Return %, Trade Count, Win Rate %, Max Drawdown %, Initial → Final Equity, Best Trade %, Worst Trade %
   - **Trade table**: last 20 trades — entry time, exit time, entry/exit price, P&L %
 
-Future strategies, slippage models, commission models, position-sizing rules, and an equity-curve chart overlay are on the roadmap.
+The heavier, more realistic version of all this lives in the server-side **Backtest Lab** (below).
+
+---
+
+## Backtest Lab (server-side — v2)
+
+A full backtesting engine that runs on the server via [backtesting.py](https://github.com/kernc/backtesting.py), reachable from the **BACKTEST LAB ↗** link in the topbar or at `/backtest`.
+
+- **Strategies**: EMA crossover (XO Trend), SMA crossover, RSI reversion, MACD crossover — each with tunable parameters.
+- **Realistic costs**: fees + slippage charged per side (as a % commission on entry and exit).
+- **Optional optimizer**: grid-searches the strategy parameters to maximise Sharpe ratio.
+- **Assets**: US & India equities (yfinance) and Hyperliquid crypto (real `candleSnapshot` OHLCV) — the same universe as the dashboard.
+- **Output**:
+  - **Stats grid**: Total Return %, Buy & Hold %, CAGR, Sharpe, Sortino, Max Drawdown %, Win Rate %, Trades, Profit Factor, Exposure %, Best/Worst trade.
+  - **Equity curve** (lightweight-charts) + full trade list.
+  - **QuantStats tearsheet**: a one-click full HTML performance report (drawdown analysis, monthly-returns heatmap, rolling Sharpe…) via [quantstats](https://github.com/ranaroussi/quantstats).
+- **Architecture**: the heavy libs are lazy-imported inside the Flask handlers, so the dashboard still boots fast. New modules: `market_data.py`, `backtest_engine.py`, `reports.py`. Endpoints: `POST /api/backtest`, `GET /api/report`.
+
+> QuantStats annualises from **daily** returns, so a `1d` interval gives the most accurate risk metrics. Still not trading advice — compare strategy *behaviour*, don't size real positions off it.
 
 ---
 

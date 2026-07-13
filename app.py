@@ -185,6 +185,71 @@ def symbols():
     })
 
 
+# ── v2: server-side backtesting + QuantStats performance reports ─────────────
+# Heavy libs (backtesting.py, quantstats) are imported lazily inside the handlers
+# so the dashboard itself still boots fast and stays unaffected if they're absent.
+
+@app.route("/backtest")
+def backtest_page():
+    import backtest_engine
+    return render_template(
+        "backtest.html",
+        indian_stocks=INDIAN_STOCKS,
+        us_stocks=US_STOCKS,
+        crypto_symbols=CRYPTO_SYMBOLS,
+        timeframes=TIMEFRAMES,
+        strategies=backtest_engine.strategy_menu(),
+    )
+
+
+def _run_bt_from(src) -> dict:
+    """Build args from a dict/MultiDict and run one backtest. Raises on bad input."""
+    import market_data, backtest_engine
+    source     = (src.get("source")   or "crypto").strip()
+    symbol     = (src.get("symbol")   or "BTC").strip()
+    interval   = (src.get("interval") or "1d").strip()
+    strategy   = (src.get("strategy") or "ema").strip()
+    capital    = float(src.get("capital")    or 10000)
+    commission = float(src.get("commission") or 0.2)
+    optimize   = str(src.get("optimize") or "").lower() in ("1", "true", "yes", "on")
+    params = src.get("params") or {}
+    if isinstance(params, str):
+        params = json.loads(params or "{}")
+    df = market_data.get_ohlc_df(source, symbol, interval)
+    result = backtest_engine.run_backtest(
+        df, strategy, params=params, cash=capital,
+        commission_pct=commission, interval=interval, optimize=optimize)
+    result["symbol"] = symbol.upper()
+    result["source"] = source
+    return result
+
+
+@app.route("/api/backtest", methods=["POST"])
+def api_backtest():
+    body = request.get_json(silent=True) or {}
+    try:
+        result = _run_bt_from(body)
+        import reports
+        result["quantstats"] = reports.key_metrics(reports.equity_to_returns(result["equity"]))
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/api/report")
+def api_report():
+    """Full QuantStats HTML tearsheet for the given params — opens in a new tab."""
+    import reports
+    try:
+        result = _run_bt_from(request.args)
+        rets = reports.equity_to_returns(result["equity"])
+        title = f"{result['symbol']} · {result['strategy']} · {result['interval']}"
+        return reports.html_tearsheet(rets, title=title), 200, {"Content-Type": "text/html; charset=utf-8"}
+    except Exception as exc:
+        return (f"<h2 style='font-family:sans-serif'>Report failed</h2><pre>{exc}</pre>",
+                400, {"Content-Type": "text/html; charset=utf-8"})
+
+
 # ── Telegram alert proxy ─────────────────────────────────────────────────────
 
 def _send_telegram(text: str) -> tuple[bool, str]:
