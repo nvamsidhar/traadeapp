@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio — Trading Dashboard</title>
+  <style>
+    :root{
+      --bg:#0c0c14; --panel:#111120; --panel2:#0f0f1a; --border:#1a1a2e;
+      --text:#c7c7d9; --muted:#6a6a86; --accent:#3b5ff5; --up:#22c55e; --down:#ef4444; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+    a{color:var(--accent);text-decoration:none}
+    .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel2);position:sticky;top:0;z-index:20}
+    .logo{font-weight:600}.logo .accent{color:var(--accent)}.spacer{flex:1}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px}
+    h1{font-size:20px;margin:2px 0}.sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+    .card h2{margin:0 0 12px;font-size:14px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+    th{color:var(--muted);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px}
+    th:first-child,td:first-child{text-align:left}
+    input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:13px;width:100%}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    .hold-src{width:90px}.hold-num{width:100px;text-align:right}
+    button{cursor:pointer;font-family:inherit}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:600}
+    .btn:hover{background:#2f4fe0}.btn:disabled{opacity:.5}
+    .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+    .btn.ghost:hover{border-color:var(--accent)}
+    .x{background:none;border:none;color:var(--muted);font-size:16px;padding:0 4px}.x:hover{color:var(--down)}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+    .kpi{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:11px 13px}
+    .kpi span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+    .kpi strong{font-size:18px}
+    .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
+    .alloc-bar{height:8px;border-radius:4px;background:var(--accent);min-width:2px}
+    .heat{border-collapse:separate;border-spacing:3px}
+    .heat td,.heat th{padding:0;border:none}
+    .heat .cell{width:52px;height:34px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#0c0c14;font-weight:600}
+    .heat .lbl{color:var(--muted);font-size:11px;padding:0 6px;font-weight:600}
+    .msg{padding:14px;color:var(--muted)}.msg.err{color:var(--down)}
+    .row-flex{display:flex;gap:20px;flex-wrap:wrap}.row-flex>div{flex:1;min-width:280px}
+    .legend{font-size:11.5px;color:var(--muted);margin-top:8px}
+    .wpill{display:inline-block;padding:1px 7px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);font-size:11px;margin:2px 3px 0 0}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">Portfolio <span class="accent">Lab</span></span>
+    <span class="spacer"></span>
+    <a href="/perp">Perp Radar</a><a href="/backtest">Backtest Lab</a><a href="/">← Dashboard</a>
+  </header>
+
+  <div class="wrap">
+    <h1>Portfolio Tracker</h1>
+    <p class="sub">Track holdings, live P&amp;L and allocation, see how correlated your book is, and get an efficient-frontier (max-Sharpe) rebalance suggestion. Holdings stay in your browser.</p>
+
+    <div class="card">
+      <h2>Holdings</h2>
+      <table>
+        <thead><tr><th>Source</th><th>Symbol</th><th>Quantity</th><th>Cost / unit</th><th></th></tr></thead>
+        <tbody id="holdBody"></tbody>
+      </table>
+      <div style="margin-top:12px;display:flex;gap:10px">
+        <button class="btn ghost" id="addRow">+ Add holding</button>
+        <button class="btn" id="analyzeBtn" style="margin-left:auto">Analyze portfolio</button>
+      </div>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const SYMS = { crypto: {{ crypto_symbols | tojson }}, us: {{ us_stocks | tojson }}, india: {{ indian_stocks | tojson }} };
+    const LS = 'td_portfolio';
+    const $ = id => document.getElementById(id);
+    const num = (n,d=2) => (n==null||isNaN(n))?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+    const money = n => (n==null||isNaN(n))?'—':(n<0?'-$':'$')+num(Math.abs(n));
+    const pct = n => (n==null||isNaN(n))?'—':(n>=0?'+':'')+num(n)+'%';
+    const cls = n => (n==null||isNaN(n))?'':(n>=0?'up':'down');
+
+    let holds = [];
+    try { holds = JSON.parse(localStorage.getItem(LS)) || []; } catch {}
+    if (!holds.length) holds = [{source:'us',symbol:'AAPL',qty:10,cost:150},{source:'us',symbol:'NVDA',qty:5,cost:100},{source:'crypto',symbol:'BTC',qty:0.1,cost:40000}];
+
+    function save(){ localStorage.setItem(LS, JSON.stringify(holds)); }
+    function renderHoldings(){
+      $('holdBody').innerHTML = holds.map((h,i)=>`
+        <tr>
+          <td><select class="hold-src" data-i="${i}" data-f="source">
+            ${['crypto','us','india'].map(s=>`<option ${h.source===s?'selected':''}>${s}</option>`).join('')}
+          </select></td>
+          <td><input data-i="${i}" data-f="symbol" value="${h.symbol||''}" list="syms_${h.source}" style="text-align:left"/></td>
+          <td><input class="hold-num" type="number" step="any" data-i="${i}" data-f="qty" value="${h.qty??''}"/></td>
+          <td><input class="hold-num" type="number" step="any" data-i="${i}" data-f="cost" value="${h.cost??''}"/></td>
+          <td><button class="x" data-del="${i}">×</button></td>
+        </tr>`).join('') +
+        `<datalist id="syms_crypto">${SYMS.crypto.map(s=>`<option value="${s}">`).join('')}</datalist>
+         <datalist id="syms_us">${SYMS.us.map(s=>`<option value="${s}">`).join('')}</datalist>
+         <datalist id="syms_india">${SYMS.india.map(s=>`<option value="${s.replace('.NS','')}">`).join('')}</datalist>`;
+    }
+    $('holdBody').addEventListener('input', e=>{
+      const i=e.target.dataset.i, f=e.target.dataset.f; if(i==null) return;
+      holds[i][f] = (f==='qty'||f==='cost') ? parseFloat(e.target.value) : e.target.value;
+      save();
+    });
+    $('holdBody').addEventListener('click', e=>{
+      const d=e.target.dataset.del; if(d==null) return;
+      holds.splice(+d,1); save(); renderHoldings();
+    });
+    $('addRow').addEventListener('click', ()=>{ holds.push({source:'us',symbol:'',qty:0,cost:0}); save(); renderHoldings(); });
+    renderHoldings();
+
+    function heatColor(v){ // v in [-1,1]; ~0 green (diversifying), ~1 red (concentrated)
+      const t = Math.max(0, Math.min(1, (v+1)/2));      // -1..1 -> 0..1
+      const r = Math.round(52 + t*200), g = Math.round(200 - t*150), b = Math.round(120 - t*70);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    $('analyzeBtn').addEventListener('click', async ()=>{
+      const valid = holds.filter(h=>h.symbol && h.symbol.trim());
+      if(!valid.length){ $('results').innerHTML='<div class="card"><div class="msg">Add at least one holding.</div></div>'; return; }
+      $('analyzeBtn').disabled = true; $('analyzeBtn').textContent='Analyzing…';
+      $('results').innerHTML='<div class="card"><div class="msg">Fetching prices & computing correlations…</div></div>';
+      try{
+        const res = await fetch('/api/portfolio/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({holdings: valid.map(h=>({source:h.source,symbol:h.symbol}))})});
+        const d = await res.json();
+        if(!d.ok) throw new Error(d.error||'analyze failed');
+        render(d, valid);
+      }catch(e){ $('results').innerHTML=`<div class="card"><div class="msg err">⚠ ${e.message}</div></div>`; }
+      finally{ $('analyzeBtn').disabled=false; $('analyzeBtn').textContent='Analyze portfolio'; }
+    });
+
+    function render(d, valid){
+      // P&L per holding using returned prices
+      const rows = valid.map(h=>{
+        const sym=h.symbol.trim().toUpperCase();
+        const price=d.prices[sym];
+        const value = price!=null ? h.qty*price : null;
+        const cost = h.qty*h.cost;
+        const pnl = value!=null ? value-cost : null;
+        return {sym, source:h.source, qty:h.qty, costBasis:h.cost, price, value, cost, pnl,
+                st:d.stats[sym]};
+      });
+      const totVal = rows.reduce((s,r)=>s+(r.value||0),0);
+      const totCost = rows.reduce((s,r)=>s+(r.cost||0),0);
+      const totPnl = totVal-totCost;
+      const totPct = totCost? totPnl/totCost*100 : 0;
+
+      const holdRows = rows.map(r=>{
+        const w = totVal? (r.value||0)/totVal*100 : 0;
+        return `<tr>
+          <td><b>${r.sym}</b> <span class="muted" style="font-size:11px">${r.source}</span></td>
+          <td>${num(r.qty,4)}</td><td>${money(r.costBasis)}</td>
+          <td>${r.price!=null?money(r.price):'<span class="muted">no data</span>'}</td>
+          <td>${money(r.value)}</td>
+          <td class="${cls(r.pnl)}">${money(r.pnl)}</td>
+          <td class="${cls(r.pnl)}">${r.cost?pct(r.pnl/r.cost*100):'—'}</td>
+          <td><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">${num(w,1)}%<span class="alloc-bar" style="width:${Math.max(2,w)}px"></span></div></td>
+          <td class="${cls(r.st?.annReturn)}">${r.st?pct(r.st.annReturn):'—'}</td>
+          <td>${r.st?num(r.st.annVol,1)+'%':'—'}</td>
+        </tr>`;
+      }).join('');
+
+      // correlation heatmap
+      const S=d.symbols, C=d.corr;
+      const heat = `<table class="heat"><tr><td></td>${S.map(s=>`<td class="lbl">${s}</td>`).join('')}</tr>` +
+        S.map((s,i)=>`<tr><td class="lbl" style="text-align:right">${s}</td>${
+          C[i].map(v=>`<td><div class="cell" style="background:${heatColor(v)}" title="${v}">${v.toFixed(2)}</div></td>`).join('')
+        }</tr>`).join('') + `</table>`;
+
+      // optimal weights
+      let opt = '';
+      if(d.optimal){
+        const w=d.optimal.weights;
+        opt = `<div class="card"><h2>Max-Sharpe rebalance <span class="muted" style="font-weight:400">— efficient frontier (PyPortfolioOpt)</span></h2>
+          <div class="kpis">
+            <div class="kpi"><span>Exp. return (ann.)</span><strong class="${cls(d.optimal.expReturn)}">${pct(d.optimal.expReturn)}</strong></div>
+            <div class="kpi"><span>Volatility (ann.)</span><strong>${num(d.optimal.vol,1)}%</strong></div>
+            <div class="kpi"><span>Sharpe</span><strong class="${d.optimal.sharpe>=1?'up':''}">${num(d.optimal.sharpe)}</strong></div>
+          </div>
+          <div>${Object.entries(w).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="wpill"><b>${k}</b> ${num(v*100,1)}%</span>`).join('')}</div>
+          <div class="legend">Suggested weights that maximise risk-adjusted return over the last ${d.days} trading days. A weight of 0% means the optimizer would drop it. Not advice — a starting point for thinking about concentration.</div>
+        </div>`;
+      } else if(d.optimalError){
+        opt = `<div class="card"><div class="msg">Optimizer skipped: ${d.optimalError}</div></div>`;
+      }
+
+      $('results').innerHTML = `
+        <div class="card">
+          <div class="kpis">
+            <div class="kpi"><span>Market value</span><strong>${money(totVal)}</strong></div>
+            <div class="kpi"><span>Cost basis</span><strong>${money(totCost)}</strong></div>
+            <div class="kpi"><span>Total P&amp;L</span><strong class="${cls(totPnl)}">${money(totPnl)}</strong></div>
+            <div class="kpi"><span>Return</span><strong class="${cls(totPct)}">${pct(totPct)}</strong></div>
+          </div>
+          <table>
+            <thead><tr><th>Holding</th><th>Qty</th><th>Cost/u</th><th>Price</th><th>Value</th><th>P&amp;L</th><th>P&amp;L %</th><th>Weight</th><th>Ann. Ret</th><th>Ann. Vol</th></tr></thead>
+            <tbody>${holdRows}</tbody>
+          </table>
+        </div>
+        <div class="row-flex">
+          <div class="card"><h2>Correlation heatmap <span class="muted" style="font-weight:400">— daily returns, ${d.days}d</span></h2>
+            ${S.length>1?heat:'<div class="msg">Add 2+ holdings for a correlation matrix.</div>'}
+            <div class="legend"><span style="color:${heatColor(1)}">■</span> highly correlated (moves together — concentrated risk) &nbsp; <span style="color:${heatColor(0)}">■</span> uncorrelated (diversifying)</div>
+          </div>
+        </div>
+        ${opt}`;
+    }
+  </script>
+</body>
+</html>

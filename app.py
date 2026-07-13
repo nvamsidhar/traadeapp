@@ -168,7 +168,9 @@ def news():
         return jsonify({"ok": False, "error": "missing symbol"}), 400
     try:
         items = _cached_news(symbol)
-        return jsonify({"ok": True, "items": items})
+        import sentiment
+        items, agg = sentiment.annotate(items)
+        return jsonify({"ok": True, "items": items, "sentiment": agg})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
@@ -281,6 +283,46 @@ def api_perp_funding():
         return jsonify({"ok": True, "coin": coin, "history": perp_data.fetch_funding_history(coin, days)})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
+
+
+# ── v2 backlog: portfolio tracker + correlation + efficient frontier ─────────
+
+@app.route("/portfolio")
+def portfolio_page():
+    return render_template(
+        "portfolio.html",
+        indian_stocks=INDIAN_STOCKS, us_stocks=US_STOCKS, crypto_symbols=CRYPTO_SYMBOLS,
+    )
+
+
+@app.route("/api/portfolio/analyze", methods=["POST"])
+def api_portfolio_analyze():
+    import portfolio
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(portfolio.analyze(body.get("holdings") or []))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+# ── v2 backlog: earnings calendar (yfinance, no key) ─────────────────────────
+
+@app.route("/calendar")
+def calendar_page():
+    return render_template(
+        "calendar.html",
+        us_stocks=US_STOCKS, indian_stocks=INDIAN_STOCKS,
+    )
+
+
+@app.route("/api/calendar/earnings", methods=["POST"])
+def api_calendar_earnings():
+    import earnings
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify({"ok": True, "items": earnings.upcoming(body.get("symbols") or [])})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 # ── Telegram alert proxy ─────────────────────────────────────────────────────

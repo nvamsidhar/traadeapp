@@ -208,6 +208,14 @@ A live analytics board for Hyperliquid perpetuals at `/perp` (or **PERP RADAR �
 
 ---
 
+## Portfolio, Earnings & Sentiment (v2 backlog)
+
+- **Portfolio Lab** (`/portfolio`) — track holdings (kept in your browser), live P&L and allocation, a **correlation heatmap** across your book, and a **max-Sharpe rebalance** suggestion (PyPortfolioOpt). Module: `portfolio.py`; `POST /api/portfolio/analyze`.
+- **Earnings Calendar** (`/calendar`) — upcoming earnings dates + last surprise for your names, fetched concurrently from yfinance (no API key). Module: `earnings.py`; `POST /api/calendar/earnings`.
+- **News sentiment** — the per-symbol News modal now shows a VADER badge per headline + an overall tone, using a **finance-tuned lexicon** (so "beats / crushes / soars" read bullish, not violent). Module: `sentiment.py`.
+
+---
+
 ## Themes
 
 A **THEME** dropdown in the topbar toggles between **Dark** (default) and **Light** instantly.

@@ -8,3 +8,8 @@ python-dotenv>=1.0.0
 # v2 — server-side Backtest Lab (/backtest)
 backtesting>=0.6.0
 quantstats>=0.0.80
+
+# v2 backlog — portfolio optimization, news sentiment, earnings calendar
+PyPortfolioOpt>=1.5.0
+vaderSentiment>=3.3.0
+lxml>=5.0.0

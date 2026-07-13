@@ -3948,24 +3948,34 @@ function _escapeHtml(s) {
   return d.innerHTML;
 }
 
-function renderNewsItems(items) {
+function renderNewsItems(items, agg) {
   if (!items?.length) return '<div class="alerts-empty">No news found for this symbol.</div>';
   const now = Math.floor(Date.now() / 1000);
   const todayCutoff = now - 86400;
   const todayItems = items.filter(n => n.time >= todayCutoff);
   const olderItems = items.filter(n => n.time <  todayCutoff);
 
+  const sentColor = l => l === 'bullish' ? '#22c55e' : l === 'bearish' ? '#ef4444' : '#8a8a9a';
+  const sentIcon  = l => l === 'bullish' ? '▲' : l === 'bearish' ? '▼' : '•';
+
   const renderOne = n => `
     <a class="news-item" href="${_escapeHtml(n.link)}" target="_blank" rel="noopener noreferrer">
       <div class="news-meta">
         <span class="news-pub">${_escapeHtml(n.publisher)}</span>
         <span class="news-time">${_fmtRelTime(n.time)}</span>
+        ${n.sentimentLabel ? `<span class="news-sent" title="VADER sentiment ${n.sentiment}" style="margin-left:auto;color:${sentColor(n.sentimentLabel)};font-weight:600">${sentIcon(n.sentimentLabel)} ${n.sentimentLabel}</span>` : ''}
       </div>
       <div class="news-title">${_escapeHtml(n.title)}</div>
     </a>
   `;
 
   let html = '';
+  if (agg && agg.count) {
+    html += `<div class="news-agg" style="padding:9px 11px;margin-bottom:10px;border:1px solid #1a1a2e;border-radius:8px;background:#0f0f1a;font-size:13px">
+      Overall tone: <b style="color:${sentColor(agg.label)}">${sentIcon(agg.label)} ${agg.label}</b>
+      <span style="color:#6a6a86">· avg ${agg.avg >= 0 ? '+' : ''}${agg.avg} across ${agg.count} headlines (VADER)</span>
+    </div>`;
+  }
   if (todayItems.length) {
     html += '<h3 class="news-section-h">Today</h3>' + todayItems.map(renderOne).join('');
   }
@@ -3993,7 +4003,7 @@ async function openNewsModal(pane) {
       out.innerHTML = `<div class="alerts-empty">${_escapeHtml(j.info)}</div>`;
       return;
     }
-    out.innerHTML = renderNewsItems(j.items);
+    out.innerHTML = renderNewsItems(j.items, j.sentiment);
   } catch (err) {
     out.innerHTML = `<div class="alerts-empty">Failed to load: ${_escapeHtml(err.message ?? String(err))}</div>`;
   }

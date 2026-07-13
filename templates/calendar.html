@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Earnings Calendar — Trading Dashboard</title>
+  <style>
+    :root{--bg:#0c0c14;--panel:#111120;--panel2:#0f0f1a;--border:#1a1a2e;--text:#c7c7d9;--muted:#6a6a86;--accent:#3b5ff5;--up:#22c55e;--down:#ef4444;--warn:#f59e0b}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+    a{color:var(--accent);text-decoration:none}
+    .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel2);position:sticky;top:0;z-index:20}
+    .logo{font-weight:600}.logo .accent{color:var(--accent)}.spacer{flex:1}
+    .wrap{max-width:960px;margin:0 auto;padding:20px}
+    h1{font-size:20px;margin:2px 0}.sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+    input{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px 11px;font-size:13px;width:100%}
+    input:focus{outline:none;border-color:var(--accent)}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .controls input{flex:1;min-width:220px}
+    button{cursor:pointer;font-family:inherit;border-radius:7px;font-size:13px}
+    .btn{background:var(--accent);color:#fff;border:none;padding:9px 20px;font-weight:600}.btn:hover{background:#2f4fe0}.btn:disabled{opacity:.5}
+    .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 14px}.btn.ghost:hover{border-color:var(--accent)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+    th{color:var(--muted);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px}
+    th:first-child,td:first-child{text-align:left}
+    .sym{font-weight:600}
+    .pill{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:600}
+    .soon{background:rgba(239,68,68,.15);color:#fb7185}
+    .wk{background:rgba(245,158,11,.15);color:#fbbf24}
+    .later{background:rgba(59,95,245,.13);color:#8aa0ff}
+    .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
+    .msg{padding:16px;color:var(--muted)}.msg.err{color:var(--down)}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">Earnings <span class="accent">Calendar</span></span>
+    <span class="spacer"></span>
+    <a href="/portfolio">Portfolio</a><a href="/perp">Perp Radar</a><a href="/">← Dashboard</a>
+  </header>
+
+  <div class="wrap">
+    <h1>Upcoming Earnings</h1>
+    <p class="sub">Know when your names report — a purely technical dashboard shouldn't get blindsided by an earnings gap. Powered by yfinance (no API key). Enter tickers or pull from your portfolio.</p>
+
+    <div class="card">
+      <div class="controls">
+        <input id="syms" placeholder="AAPL, MSFT, NVDA, TSLA…" />
+        <button class="btn ghost" id="loadPf">Load my portfolio</button>
+        <button class="btn" id="go">Check earnings</button>
+      </div>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    $('syms').value = 'AAPL, MSFT, NVDA, TSLA, AMZN, GOOGL';
+
+    $('loadPf').addEventListener('click', () => {
+      try {
+        const pf = JSON.parse(localStorage.getItem('td_portfolio')) || [];
+        const syms = [...new Set(pf.map(h => (h.symbol||'').trim().toUpperCase()).filter(Boolean))];
+        if (syms.length) $('syms').value = syms.join(', ');
+        else $('syms').value = $('syms').value;
+      } catch {}
+    });
+
+    function pill(n) {
+      if (n == null) return '';
+      if (n <= 7)  return `<span class="pill soon">in ${n}d</span>`;
+      if (n <= 21) return `<span class="pill wk">in ${n}d</span>`;
+      return `<span class="pill later">in ${n}d</span>`;
+    }
+    const num = (n,d=2) => n==null||isNaN(n)?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+    const pct = n => n==null||isNaN(n)?'—':(n>=0?'+':'')+num(n)+'%';
+
+    $('go').addEventListener('click', async () => {
+      const symbols = $('syms').value.split(',').map(s=>s.trim()).filter(Boolean);
+      if (!symbols.length) return;
+      $('go').disabled = true; $('go').textContent = 'Checking…';
+      $('results').innerHTML = '<div class="card"><div class="msg">Fetching earnings dates…</div></div>';
+      try {
+        const r = await fetch('/api/calendar/earnings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbols})});
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error||'failed');
+        render(d.items);
+      } catch(e){ $('results').innerHTML = `<div class="card"><div class="msg err">⚠ ${e.message}</div></div>`; }
+      finally { $('go').disabled=false; $('go').textContent='Check earnings'; }
+    });
+
+    function render(items) {
+      const withDate = items.filter(i=>i.next), noDate = items.filter(i=>!i.next);
+      const rows = withDate.map(i => {
+        const n=i.next, l=i.last;
+        return `<tr>
+          <td class="sym">${i.symbol}</td>
+          <td>${n.date} ${pill(n.daysUntil)}</td>
+          <td>${n.epsEst!=null?num(n.epsEst):'—'}</td>
+          <td class="${l&&l.surprisePct>=0?'up':l?'down':''}">${l&&l.surprisePct!=null?pct(l.surprisePct):'—'}</td>
+        </tr>`;
+      }).join('');
+      const noRows = noDate.map(i=>`<tr><td class="sym">${i.symbol}</td><td class="muted" colspan="3">no scheduled date found</td></tr>`).join('');
+      $('results').innerHTML = `
+        <div class="card">
+          <table>
+            <thead><tr><th>Symbol</th><th>Next earnings</th><th>EPS est.</th><th>Last surprise</th></tr></thead>
+            <tbody>${rows || ''}${noRows}</tbody>
+          </table>
+          ${!items.length ? '<div class="msg">No symbols.</div>' : ''}
+          <div class="msg" style="padding-top:12px">Dates are yfinance's best estimate and can shift; confirm with the company's IR page before trading around them.</div>
+        </div>`;
+    }
+  </script>
+</body>
+</html>
