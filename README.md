@@ -9,8 +9,9 @@ Runs locally on Python + Flask. The core dashboard does its charting, indicator 
 ## What it does
 
 - **Multi-pane chart grid** of independent charts (1, 2, 4, 6, or 8 panes).
-- **Three data sources**, switchable per pane:
+- **Four data sources**, switchable per pane:
   - Hyperliquid perpetuals (live WebSocket trades + REST candle history)
+  - Coinbase spot (server-side REST candles + price polling; `BTC-USD` style products)
   - US stocks via Yahoo Finance (yfinance)
   - Indian stocks (NSE) via Yahoo Finance
 - **Live price updates** — streaming trades for crypto, 5-second polling for stocks.

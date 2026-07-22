@@ -157,9 +157,10 @@ function openColorPicker(initial, onChange) {
 
 // Source → symbol list mapping
 const SOURCE_SYMBOLS = {
-  crypto: CRYPTO_SYMBOLS,
-  us:     US_STOCKS,
-  india:  INDIAN_STOCKS,
+  crypto:   CRYPTO_SYMBOLS,
+  coinbase: COINBASE_SYMBOLS,
+  us:       US_STOCKS,
+  india:    INDIAN_STOCKS,
 };
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ function resolveSymbol(source, raw) {
   const s = raw.trim().toUpperCase();
   if (!s) return '';
   if (source === 'crypto') return s;        // Hyperliquid coin name
+  if (source === 'coinbase') return s.includes('-') ? s : s + '-USD';  // Coinbase product id, e.g. BTC-USD
   if (source === 'india')  return s.endsWith('.NS') ? s : s + '.NS';
   // US — plain ticker
   return s;
@@ -1412,15 +1414,15 @@ async function fetchHLCandles(coin, interval) {
   })).filter(c => c.time > 0);
 }
 
-async function fetchStockCandles(symbol, interval) {
-  const res = await fetch(`${FLASK_URL}/api/candles?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
+async function fetchStockCandles(symbol, interval, source = '') {
+  const res = await fetch(`${FLASK_URL}/api/candles?symbol=${encodeURIComponent(symbol)}&interval=${interval}&source=${encodeURIComponent(source)}`);
   const json = await res.json();
   if (!json.ok) throw new Error(json.error ?? 'fetch failed');
   return json.data;
 }
 
-async function fetchStockPrice(symbol) {
-  const res = await fetch(`${FLASK_URL}/api/price?symbol=${encodeURIComponent(symbol)}`);
+async function fetchStockPrice(symbol, source = '') {
+  const res = await fetch(`${FLASK_URL}/api/price?symbol=${encodeURIComponent(symbol)}&source=${encodeURIComponent(source)}`);
   const json = await res.json();
   return json.ok ? json.price : null;
 }
@@ -2060,7 +2062,7 @@ class Pane {
     try {
       compCandles = (source === 'crypto')
         ? await fetchHLCandles(resolved, this.interval)
-        : await fetchStockCandles(resolved, this.interval);
+        : await fetchStockCandles(resolved, this.interval, source);
     } catch (err) { console.warn('[compare] fetch failed:', err); return; }
 
     if (this.destroyed || !compCandles?.length || !this.candles.length) return;
@@ -2728,7 +2730,7 @@ class Pane {
     try {
       const candles = isCrypto(this.source)
         ? await fetchHLCandles(this.symbol, this.interval)
-        : await fetchStockCandles(this.symbol, this.interval);
+        : await fetchStockCandles(this.symbol, this.interval, this.source);
 
       if (this.destroyed) return;
       this.candles = candles;
@@ -2805,7 +2807,7 @@ class Pane {
 
   async _pollStock() {
     if (this.destroyed) return;
-    const price = await fetchStockPrice(this.symbol).catch(() => null);
+    const price = await fetchStockPrice(this.symbol, this.source).catch(() => null);
     if (price == null || this.destroyed) return;
     if (this.lastBar) {
       this.lastBar.close = price;
@@ -3382,7 +3384,7 @@ class WatchTile {
     try {
       const candles = (this.source === 'crypto')
         ? await fetchHLCandles(this.resolved, '1d')
-        : await fetchStockCandles(this.resolved, '1d');
+        : await fetchStockCandles(this.resolved, '1d', this.source);
       if (!candles?.length) { this._setError(); return; }
       const last = candles[candles.length - 1];
       this._update(last.close, last.open);
@@ -4024,7 +4026,7 @@ async function openStatsModal(pane) {
   try {
     const dailies = (pane.source === 'crypto')
       ? await fetchHLCandles(pane.symbol, '1d')
-      : await fetchStockCandles(pane.symbol, '1d');
+      : await fetchStockCandles(pane.symbol, '1d', pane.source);
     if (!dailies?.length) {
       out.innerHTML = '<div class="alerts-empty">No daily data available for this symbol.</div>';
       return;

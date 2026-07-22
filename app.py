@@ -19,6 +19,7 @@ from flask_cors import CORS
 from data_source import (
     DATA_SOURCE, INDIAN_STOCKS, US_STOCKS, CRYPTO_SYMBOLS, TIMEFRAMES,
     INDIAN_STOCKS_NAMES, US_STOCKS_NAMES,
+    COINBASE_SYMBOLS, get_coinbase_candles, get_coinbase_price,
     get_yfinance_news,
 )
 from alerts_store  import all_alerts, add_alert, delete_alert
@@ -59,15 +60,18 @@ def _cached_news(symbol: str) -> list:
     return data
 
 
-def _cached_candles(symbol: str, interval: str) -> list:
-    key = f"{symbol}:{interval}"
+def _cached_candles(symbol: str, interval: str, source: str = "") -> list:
+    key = f"{source}:{symbol}:{interval}"
     with _cache_lock:
         if key in _cache:
             data, ts = _cache[key]
             if time.time() - ts < _CACHE_TTL:
                 return data
 
-    data = DATA_SOURCE["get_candles"](symbol, interval)
+    if source == "coinbase":
+        data = get_coinbase_candles(symbol, interval)
+    else:
+        data = DATA_SOURCE["get_candles"](symbol, interval)
 
     with _cache_lock:
         _cache[key] = (data, time.time())
@@ -83,6 +87,7 @@ def index():
         indian_stocks=INDIAN_STOCKS,
         us_stocks=US_STOCKS,
         crypto_symbols=CRYPTO_SYMBOLS,
+        coinbase_symbols=COINBASE_SYMBOLS,
         timeframes=TIMEFRAMES,
         indian_stocks_names=INDIAN_STOCKS_NAMES,
         us_stocks_names=US_STOCKS_NAMES,
@@ -138,8 +143,9 @@ def pulse_rebuild():
 def candles():
     symbol   = request.args.get("symbol",   "RELIANCE.NS")
     interval = request.args.get("interval", "1d")
+    source   = request.args.get("source",   "")
     try:
-        data = _cached_candles(symbol, interval)
+        data = _cached_candles(symbol, interval, source)
         return jsonify({"ok": True, "data": data})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -148,8 +154,9 @@ def candles():
 @app.route("/api/price")
 def price():
     symbol = request.args.get("symbol", "RELIANCE.NS")
+    source = request.args.get("source", "")
     try:
-        p = DATA_SOURCE["get_price"](symbol)
+        p = get_coinbase_price(symbol) if source == "coinbase" else DATA_SOURCE["get_price"](symbol)
         return jsonify({"ok": True, "price": p})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500

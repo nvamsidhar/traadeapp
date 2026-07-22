@@ -124,4 +124,4 @@ def update_alert(alert_id: str, updates: dict[str, Any]) -> dict[str, Any] | Non
 def _default_interval(source: str) -> str:
     # Crypto can poll cheaply at 1h; stocks default to 1d because yfinance
     # rate-limits aggressively on intraday intervals from cloud IPs.
-    return "1h" if source == "crypto" else "1d"
+    return "1h" if source in ("crypto", "coinbase") else "1d"

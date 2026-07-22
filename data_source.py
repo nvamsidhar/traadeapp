@@ -255,6 +255,73 @@ CRYPTO_SYMBOLS: list[str] = _fetch_hyperliquid_symbols()
 
 TIMEFRAMES: list[str] = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1wk"]
 
+
+# ── Coinbase (Coinbase Exchange public market data — no API key) ─────────────
+# A second crypto source alongside Hyperliquid, routed server-side through
+# /api/candles (avoids browser CORS). Coinbase only serves 1m/5m/15m/1h/6h/1d
+# natively, so 30m / 4h / 1wk are resampled from a finer granularity.
+
+_COINBASE_URL = "https://api.exchange.coinbase.com"
+_COINBASE_HDR = {"User-Agent": "TradingDashboard/1.0", "Accept": "application/json"}
+
+_COINBASE_GRAN: dict[str, tuple[int, str | None]] = {
+    "1m": (60, None),   "5m": (300, None),  "15m": (900, None),
+    "30m": (900, "30min"), "1h": (3600, None), "4h": (3600, "4h"),
+    "1d": (86400, None), "1wk": (86400, "1W"),
+}
+
+COINBASE_SYMBOLS: list[str] = [
+    "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD", "ADA-USD", "AVAX-USD",
+    "LINK-USD", "DOT-USD", "MATIC-USD", "LTC-USD", "BCH-USD", "UNI-USD", "ATOM-USD",
+    "XLM-USD", "ETC-USD", "APT-USD", "ARB-USD", "OP-USD", "AAVE-USD", "MKR-USD",
+    "CRV-USD", "SUI-USD", "NEAR-USD", "INJ-USD", "FIL-USD", "ALGO-USD", "GRT-USD",
+    "SHIB-USD", "PEPE-USD", "SAND-USD", "IMX-USD", "HBAR-USD", "STX-USD", "LDO-USD",
+]
+
+
+def _resample_candles(candles: list[dict], rule: str) -> list[dict]:
+    """Aggregate a candle list into a coarser interval (e.g. 1h → 4h)."""
+    if not candles:
+        return candles
+    df = pd.DataFrame(candles)
+    df.index = pd.to_datetime(df["time"], unit="s")
+    agg = df.resample(rule).agg({
+        "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum",
+    }).dropna()
+    return [
+        {"time": int(ts.timestamp()), "open": float(r.open), "high": float(r.high),
+         "low": float(r.low), "close": float(r.close), "volume": float(r.volume)}
+        for ts, r in agg.iterrows()
+    ]
+
+
+def get_coinbase_candles(product: str, interval: str) -> list[dict]:
+    """OHLCV from Coinbase Exchange (product like 'BTC-USD'). ~300 bars/request."""
+    gran, resample = _COINBASE_GRAN.get(interval, (3600, None))
+    r = requests.get(f"{_COINBASE_URL}/products/{product}/candles",
+                     params={"granularity": gran}, headers=_COINBASE_HDR, timeout=12)
+    r.raise_for_status()
+    rows = r.json() or []
+    # Coinbase row order is [time, low, high, open, close, volume], newest first.
+    candles = [
+        {"time": int(t), "open": float(op), "high": float(hi),
+         "low": float(lo), "close": float(cl), "volume": float(vol)}
+        for t, lo, hi, op, cl, vol in rows
+    ]
+    candles.sort(key=lambda c: c["time"])
+    return _resample_candles(candles, resample) if resample else candles
+
+
+def get_coinbase_price(product: str) -> float | None:
+    try:
+        r = requests.get(f"{_COINBASE_URL}/products/{product}/ticker",
+                         headers=_COINBASE_HDR, timeout=8)
+        r.raise_for_status()
+        return float(r.json()["price"])
+    except Exception:
+        return None
+
+
 # ── Active data source (swap here to change broker) ───────────────────────────
 #
 # Example — to plug in Alpaca:

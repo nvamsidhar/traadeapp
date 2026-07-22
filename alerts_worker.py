@@ -82,6 +82,9 @@ def _fetch_candles(source: str, symbol: str, interval: str) -> list[dict]:
     try:
         if source == "crypto":
             data = _fetch_hl_candles(symbol, interval)
+        elif source == "coinbase":
+            from data_source import get_coinbase_candles
+            data = get_coinbase_candles(symbol, interval) or []
         else:
             # Lazy import to avoid circular references at module load
             from data_source import DATA_SOURCE
@@ -340,7 +343,7 @@ def _evaluate_all_once() -> None:
         resolved = alert.get("resolvedSymbol") or alert.get("rawSymbol")
         if not resolved:
             continue
-        interval = alert.get("interval") or ("1h" if source == "crypto" else "1d")
+        interval = alert.get("interval") or ("1h" if source in ("crypto", "coinbase") else "1d")
         candles = _fetch_candles(source, resolved, interval)
         if not candles:
             continue
